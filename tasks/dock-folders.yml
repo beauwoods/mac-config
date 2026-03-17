@@ -18,6 +18,7 @@
 - name: Add Downloads folder to Dock right section
   command: >
     dockutil --add ~/Downloads
+    --replacing Downloads
     --display stack --view fan --sort dateadded
     --section others --position 2 --no-restart
   ignore_errors: true

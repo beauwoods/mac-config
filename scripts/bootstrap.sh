@@ -47,13 +47,6 @@ if ! command -v brew &>/dev/null; then
 fi
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
-# ── Pre-install casks that need interactive sudo ─────────────────────
-# Some casks run .pkg installers with sudo internally. Ansible has no
-# TTY, so those fail and block the entire play. Install them here
-# (with TTY access) so Ansible sees them as already installed.
-echo "$SUDO_PASS" | sudo -S -v 2>/dev/null   # refresh sudo timestamp
-brew install --cask wireshark || true
-
 # ── Ansible ───────────────────────────────────────────────────────────
 # pip3 installs binaries to a user-local dir not on PATH by default
 export PATH="$(python3 -m site --user-base)/bin:$PATH"
@@ -97,6 +90,14 @@ else
   echo "Phase 1 finished with errors (see above). Log: $LOG"
   echo "Continuing to manual pause — errors will appear in the migration report."
 fi
+
+# ── Wireshark (needs interactive sudo for its .pkg) ──────────────────
+# Installed here (not in Ansible) because its post-install .pkg calls
+# sudo internally and needs a real terminal. Done after Phase 1 so it
+# doesn't block anything if it fails.
+echo ""
+echo "Installing Wireshark (may prompt for password)..."
+brew install --cask wireshark || true
 
 # ── Pause ─────────────────────────────────────────────────────────────
 open "$LOCAL/docs/MANUAL_PAUSE.md"

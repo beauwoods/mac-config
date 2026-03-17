@@ -116,7 +116,7 @@ dockitems_persist:
     path: "/Applications/Slack.app/"
     pos: 5
   - name: "GeForce NOW"
-    path: "/Applications/GeForce NOW.app/"
+    path: "/Applications/GeForceNOW.app/"
     pos: 6
   - name: "Photos"
     path: "/System/Applications/Photos.app/"
