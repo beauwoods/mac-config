@@ -12,18 +12,6 @@ set -euo pipefail
 REPO="https://github.com/beauwoods/mac-config"
 LOCAL="$HOME/mac-config"
 
-# Kill any orphaned sudo keep-alive loops from previous crashed runs
-pkill -f 'sudo -n true' 2>/dev/null || true
-
-# Read the password once — used for sudo AND passed to Ansible's become.
-# Process substitution (<(echo ...)) keeps it out of ps and off disk.
-read -s -r -p "Enter your password once — needed for the entire setup: " SUDO_PASS
-echo ""
-echo "$SUDO_PASS" | sudo -S -v 2>/dev/null
-( while true; do sudo -n true; sleep 60; done ) &
-SUDO_PID=$!
-trap 'kill $SUDO_PID 2>/dev/null' EXIT
-
 # ── Xcode CLI tools ────────────────────────────────────────────────────
 if ! xcode-select -p &>/dev/null; then
   xcode-select --install 2>/dev/null || true
@@ -37,14 +25,33 @@ if [ ! -d "$LOCAL" ]; then
 else
   git -C "$LOCAL" pull --ff-only 2>/dev/null || true
 fi
-# Re-exec from cloned copy so we get the full script
+# Re-exec from cloned copy so we get the full script.
+# Everything above this line runs twice (before and after re-exec).
+# Everything below runs once, from the cloned copy.
 [ "$0" != "$LOCAL/scripts/bootstrap.sh" ] && exec bash "$LOCAL/scripts/bootstrap.sh" "$@"
+
+# ── Credentials (runs once, after re-exec) ────────────────────────────
+# Kill any orphaned sudo keep-alive loops from previous crashed runs
+pkill -f 'sudo -n true' 2>/dev/null || true
+
+read -s -r -p "Enter your password once — needed for the entire setup: " SUDO_PASS
+echo ""
+echo "$SUDO_PASS" | sudo -S -v 2>/dev/null
+( while true; do sudo -n true; sleep 60; done ) &
+SUDO_PID=$!
+trap 'kill $SUDO_PID 2>/dev/null' EXIT
 
 # ── Homebrew ──────────────────────────────────────────────────────────
 if ! command -v brew &>/dev/null; then
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 fi
 eval "$(/opt/homebrew/bin/brew shellenv)"
+
+# ── Pre-install casks that need interactive sudo ─────────────────────
+# Some casks run .pkg installers with sudo internally. Ansible has no
+# TTY, so those fail and block the entire play. Install them here
+# (with TTY access) so Ansible sees them as already installed.
+brew install --cask wireshark 2>/dev/null || true
 
 # ── Ansible ───────────────────────────────────────────────────────────
 # pip3 installs binaries to a user-local dir not on PATH by default
@@ -111,6 +118,10 @@ if ! $PHASE2_OK; then
 fi
 
 # ── Migration Report ────────────────────────────────────────────────
+# Disable strict error handling — report must complete even if
+# individual checks fail (missing dirs, empty grep, etc.)
+set +euo pipefail
+
 PRIVATE_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/dotfiles-private"
 OLD_INVENTORY="$PRIVATE_DIR/installed_apps.txt"
 REPORT="$HOME/Desktop/migration-report.txt"
@@ -130,7 +141,7 @@ REPORT="$HOME/Desktop/migration-report.txt"
 
   # Capture current state
   echo "## Currently Installed (/Applications)"
-  ls /Applications/ 2>/dev/null | grep '\.app$' | sort
+  ls /Applications/ 2>/dev/null | grep '\.app$' | sort || echo "[none]"
   echo ""
 
   echo "## Currently Installed (/Applications/Setapp)"
@@ -156,16 +167,16 @@ REPORT="$HOME/Desktop/migration-report.txt"
     echo ""
 
     # Extract .app names from old inventory
-    OLD_APPS=$(grep '\.app$' "$OLD_INVENTORY" | sed 's/\.app$//' | sort)
+    OLD_APPS=$(grep '\.app$' "$OLD_INVENTORY" | sed 's/\.app$//' | sort || true)
     NEW_APPS=$(ls /Applications/ /Applications/Setapp/ ~/Applications/ 2>/dev/null \
-               | grep '\.app$' | sed 's/\.app$//' | sort -u)
+               | grep '\.app$' | sed 's/\.app$//' | sort -u || true)
 
-    MISSING=$(comm -23 <(echo "$OLD_APPS") <(echo "$NEW_APPS"))
-    ADDED=$(comm -13 <(echo "$OLD_APPS") <(echo "$NEW_APPS"))
+    MISSING=$(comm -23 <(echo "$OLD_APPS") <(echo "$NEW_APPS") || true)
+    ADDED=$(comm -13 <(echo "$OLD_APPS") <(echo "$NEW_APPS") || true)
 
     if [ -n "$MISSING" ]; then
       echo "### On old machine but NOT on new (may need manual install):"
-      echo "$MISSING" | while read -r app; do echo "  - $app"; done
+      echo "$MISSING" | while read -r app; do [ -n "$app" ] && echo "  - $app"; done
     else
       echo "### No missing apps — everything from the old machine is present."
     fi
@@ -173,7 +184,7 @@ REPORT="$HOME/Desktop/migration-report.txt"
 
     if [ -n "$ADDED" ]; then
       echo "### On new machine but NOT on old (newly added):"
-      echo "$ADDED" | while read -r app; do echo "  + $app"; done
+      echo "$ADDED" | while read -r app; do [ -n "$app" ] && echo "  + $app"; done
     else
       echo "### No new additions beyond what was on the old machine."
     fi
