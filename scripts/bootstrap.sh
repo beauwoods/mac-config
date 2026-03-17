@@ -221,8 +221,8 @@ REPORT="$HOME/Desktop/migration-report.txt"
   # Trackpad
   check_default "com.apple.driver.AppleBluetoothMultitouch.trackpad" "Clicking" "1" "Tap to click (Bluetooth)"
   check_default "com.apple.AppleMultitouchTrackpad" "Clicking" "1" "Tap to click (built-in)"
-  check_default "com.apple.AppleMultitouchTrackpad" "FirstClickThreshold" "1" "First click threshold"
-  check_default "com.apple.AppleMultitouchTrackpad" "SecondClickThreshold" "1" "Second click threshold"
+  check_default "com.apple.AppleMultitouchTrackpad" "FirstClickThreshold" "1" "Light click threshold"
+  check_default "com.apple.AppleMultitouchTrackpad" "SecondClickThreshold" "1" "Light force-click threshold"
   check_default "NSGlobalDomain" "com.apple.swipescrolldirection" "0" "Scroll direction (traditional)"
 
   # Finder
@@ -241,7 +241,32 @@ REPORT="$HOME/Desktop/migration-report.txt"
   # Sound
   check_default "NSGlobalDomain" "com.apple.sound.uiaudio.enabled" "0" "UI sounds disabled"
 
-  # Mail (requires Full Disk Access for Terminal — see MANUAL_PAUSE.md step 1)
+  # Save & Print dialogs
+  check_default "NSGlobalDomain" "NSNavPanelExpandedStateForSaveMode" "1" "Save dialog expanded"
+  check_default "NSGlobalDomain" "NSNavPanelExpandedStateForSaveMode2" "1" "Save dialog expanded (v2)"
+  check_default "NSGlobalDomain" "PMPrintingExpandedStateForPrint" "1" "Print dialog expanded"
+  check_default "NSGlobalDomain" "PMPrintingExpandedStateForPrint2" "1" "Print dialog expanded (v2)"
+
+  # Screen saver & lock
+  check_default "com.apple.screensaver" "askForPasswordDelay" "0" "Password required immediately"
+
+  # Calendar (requires Full Disk Access — see MANUAL_PAUSE.md step 1)
+  if defaults read com.apple.iCal "Show Week Numbers" &>/dev/null; then
+    check_default "com.apple.iCal" "Show Week Numbers" "1" "Cal show week numbers"
+    check_default "com.apple.iCal" "TimeZone support enabled" "1" "Cal time zone support"
+    check_default "com.apple.iCal" "first day of week" "0" "Cal week starts Sunday"
+    check_default "com.apple.iCal" "last calendar view description" "7-day" "Cal default week view"
+    check_default "com.apple.iCal" "number of hours displayed" "14" "Cal hours displayed"
+    check_default "com.apple.iCal" "display birthdays calendar" "1" "Cal show birthdays"
+    check_default "com.apple.iCal" "ShowDeclinedEvents" "0" "Cal hide declined events"
+    check_default "com.apple.iCal" "InvitationNotificationsDisabled" "1" "Cal invitation popups off"
+    check_default "com.apple.iCal" "CalendarSidebarShown" "1" "Cal sidebar visible"
+    check_default "com.apple.iCal" "CalDefaultCalendar" "UseLastSelectedAsDefaultCalendar" "Cal default calendar"
+  else
+    echo "  --  Calendar: domain not readable — ensure Terminal has Full Disk Access and Calendar has been launched once"
+  fi
+
+  # Mail (requires Full Disk Access — see MANUAL_PAUSE.md step 1)
   if defaults read com.apple.mail MoveDiscardedMessagesToArchive &>/dev/null; then
     check_default "com.apple.mail" "MoveDiscardedMessagesToArchive" "1" "Mail archive behavior"
     check_default "com.apple.mail" "ThreadingDefault" "1" "Mail threading on"
@@ -263,7 +288,7 @@ REPORT="$HOME/Desktop/migration-report.txt"
   fi
 
   # Dock
-  check_default "com.apple.dock" "tilesize" "41" "Dock tile size"
+  check_default "com.apple.dock" "tilesize" "41" "Dock tile size (px)"
   check_default "com.apple.dock" "autohide" "0" "Dock autohide off"
   check_default "com.apple.dock" "magnification" "0" "Dock magnification off"
   check_default "com.apple.dock" "mru-spaces" "0" "MRU spaces off"

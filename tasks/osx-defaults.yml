@@ -8,49 +8,85 @@
   loop:
 
     # ── Trackpad ────────────────────────────────────────────────────────
+    # Enable tap-to-click on both Bluetooth and built-in trackpads
     - { domain: "com.apple.driver.AppleBluetoothMultitouch.trackpad",
         key: Clicking,              type: int, value: 1 }
     - { domain: "com.apple.AppleMultitouchTrackpad",
         key: Clicking,              type: int, value: 1 }
+    # Light click threshold (1 = light, 2 = medium, 3 = firm)
     - { domain: "com.apple.AppleMultitouchTrackpad",
         key: FirstClickThreshold,   type: int, value: 1 }
+    # Force-click threshold (same scale as above)
     - { domain: "com.apple.AppleMultitouchTrackpad",
         key: SecondClickThreshold,  type: int, value: 1 }
+    # Disable "natural" (reverse) scroll direction — classic scroll behavior.
+    # NOTE: on macOS Tahoe this doesn't persist through reboot; must also
+    # toggle manually in System Settings (see MANUAL_PAUSE.md step 6).
     - { domain: NSGlobalDomain,
         key: "com.apple.swipescrolldirection", type: bool, value: false }
 
     # ── Finder ──────────────────────────────────────────────────────────
+    # Always show file extensions in Finder and Open/Save dialogs
     - { domain: NSGlobalDomain,
         key: AppleShowAllExtensions,        type: bool, value: true }
+    # Show hidden (dot) files in Finder
     - { domain: "com.apple.finder",
         key: AppleShowAllFiles,             type: bool, value: true }
+    # Show breadcrumb path bar at bottom of Finder windows
     - { domain: "com.apple.finder",
         key: ShowPathbar,                   type: bool, value: true }
+    # Show item count / free space status bar at bottom of Finder windows
     - { domain: "com.apple.finder",
         key: ShowStatusBar,                 type: bool, value: true }
+    # Default Finder view: Nlsv = List, icnv = Icon, clmv = Column, glyv = Gallery
     - { domain: "com.apple.finder",
         key: FXPreferredViewStyle,          type: string, value: Nlsv }
+    # Don't warn when changing a file extension
     - { domain: "com.apple.finder",
         key: FXEnableExtensionChangeWarning, type: bool, value: false }
+    # Disable "click desktop to show files" (Stage Manager / Window Manager)
     - { domain: "com.apple.WindowManager",
         key: EnableStandardClickToShowDesktop, type: bool, value: false }
 
     # ── Clock & units ────────────────────────────────────────────────────
+    # Use 24-hour time format in menu bar and system-wide
     - { domain: NSGlobalDomain,
         key: AppleICUForce24HourTime,  type: bool, value: true }
+    # Display temperatures in Celsius (Weather, etc.)
     - { domain: NSGlobalDomain,
         key: AppleTemperatureUnit,     type: string, value: Celsius }
 
     # ── Sound ────────────────────────────────────────────────────────────
+    # Disable system UI sound effects (button clicks, screenshot, etc.)
     - { domain: NSGlobalDomain,
         key: "com.apple.sound.uiaudio.enabled", type: int,    value: 0 }
+    # Set alert sound to Tink (a quiet, subtle tone)
     - { domain: NSGlobalDomain,
         key: "com.apple.sound.beep.sound",      type: string,
         value: "/System/Library/Sounds/Tink.aiff" }
 
+    # ── Save & Print dialogs ─────────────────────────────────────────────
+    # Expand Save dialogs by default (show full filesystem browser)
+    - { domain: NSGlobalDomain,
+        key: NSNavPanelExpandedStateForSaveMode,  type: bool, value: true }
+    - { domain: NSGlobalDomain,
+        key: NSNavPanelExpandedStateForSaveMode2, type: bool, value: true }
+    # Expand Print dialogs by default (show full options)
+    - { domain: NSGlobalDomain,
+        key: PMPrintingExpandedStateForPrint,     type: bool, value: true }
+    - { domain: NSGlobalDomain,
+        key: PMPrintingExpandedStateForPrint2,    type: bool, value: true }
+
+    # ── Screen saver & lock ──────────────────────────────────────────────
+    # Require password immediately (0 seconds) after screensaver / sleep
+    - { domain: "com.apple.screensaver",
+        key: askForPasswordDelay, type: float, value: 0 }
+
     # ── iTerm2 ───────────────────────────────────────────────────────────
+    # Load iTerm2 preferences from iCloud-synced folder instead of defaults
     - { domain: "com.googlecode.iterm2",
         key: LoadPrefsFromCustomFolder, type: bool, value: true }
+    # Path to the synced preferences folder
     - { domain: "com.googlecode.iterm2",
         key: PrefsCustomFolder,         type: string,
         value: "~/Library/Mobile Documents/com~apple~CloudDocs/dotfiles-private/iterm2" }
@@ -62,16 +98,22 @@
     # Visible = 1 → shows directly in menu bar
     # Visible = 0 → hidden from bar (may still show inside CC panel)
 
+    # Show the Control Center (BentoBox) icon in menu bar
     - { domain: "com.apple.controlcenter",
         key: "NSStatusItem Visible BentoBox",       type: int, value: 1 }
+    # Hide WiFi icon from menu bar (accessible via Control Center)
     - { domain: "com.apple.controlcenter",
         key: "NSStatusItem Visible WiFi",           type: int, value: 0 }
+    # Hide Now Playing from menu bar
     - { domain: "com.apple.controlcenter",
         key: "NSStatusItem Visible NowPlaying",     type: int, value: 0 }
+    # Hide Display brightness from menu bar
     - { domain: "com.apple.controlcenter",
         key: "NSStatusItem Visible Display",        type: int, value: 0 }
+    # Hide Shortcuts from menu bar
     - { domain: "com.apple.controlcenter",
         key: "NSStatusItem Visible Shortcuts",      type: int, value: 0 }
+    # Show Desktop widget toggle in menu bar
     - { domain: "com.apple.controlcenter",
         key: "NSStatusItem Visible Desktop",        type: int, value: 1 }
 
@@ -93,6 +135,41 @@
 
   ignore_errors: true
 
+# ── Calendar (requires Full Disk Access for Terminal) ──────────────────────────
+# Calendar is sandboxed on macOS Tahoe — same FDA requirement as Mail.
+- name: Quit Calendar before writing preferences
+  shell: osascript -e 'quit app "Calendar"' 2>/dev/null || true
+  changed_when: false
+
+- name: Apply Calendar preferences
+  community.general.osx_defaults:
+    domain: "com.apple.iCal"
+    key:    "{{ item.key }}"
+    type:   "{{ item.type }}"
+    value:  "{{ item.value }}"
+  loop:
+    # Show week numbers in the calendar sidebar / mini month
+    - { key: "Show Week Numbers",       type: bool, value: true }
+    # Enable time zone support (show TZ picker in event editor)
+    - { key: "TimeZone support enabled", type: bool, value: true }
+    # First day of week: 0 = Sunday, 1 = Monday, 6 = Saturday
+    - { key: "first day of week",       type: int,  value: 0 }
+    # Default view: "7-day" = week, "day" = day, "month" = month
+    - { key: "last calendar view description", type: string, value: "7-day" }
+    # Number of hours visible in day/week view before scrolling
+    - { key: "number of hours displayed", type: int, value: 14 }
+    # Show birthday calendar (pulled from Contacts)
+    - { key: "display birthdays calendar", type: bool, value: true }
+    # Hide events you've declined
+    - { key: ShowDeclinedEvents,        type: bool, value: false }
+    # Suppress calendar invitation notification popups
+    - { key: InvitationNotificationsDisabled, type: bool, value: true }
+    # Show the calendar list sidebar
+    - { key: CalendarSidebarShown,      type: bool, value: true }
+    # Default calendar for new events: use the last-selected calendar
+    - { key: CalDefaultCalendar,        type: string, value: UseLastSelectedAsDefaultCalendar }
+  ignore_errors: true
+
 # ── Mail (requires Full Disk Access for Terminal) ────────────────────────────
 # Mail.app is sandboxed — defaults only works with FDA enabled.
 # Bootstrap checks for this and prompts the user if needed.
@@ -107,20 +184,35 @@
     type:   "{{ item.type }}"
     value:  "{{ item.value }}"
   loop:
+    # Move discarded drafts to Archive instead of Trash
     - { key: MoveDiscardedMessagesToArchive, type: bool,   value: true }
+    # Organize messages by conversation thread
     - { key: ThreadingDefault,              type: bool,   value: true }
+    # Keep Favorites sidebar section expanded (not collapsed)
     - { key: UserDidCollapseFavoritesSectionKey, type: bool, value: false }
+    # Don't prefer split view in full-screen mode
     - { key: FullScreenPreferSplit,         type: bool,   value: false }
+    # Swipe action: 1 = Archive (default), 0 = Delete
     - { key: SwipeAction,                   type: int,    value: 1 }
+    # Show CC field in compose window
     - { key: ShowCcHeader,                  type: bool,   value: true }
+    # Show BCC field in compose window
     - { key: ShowBccHeader,                 type: bool,   value: true }
+    # Show formatting toolbar in compose window
     - { key: ShowComposeFormatInspectorBar, type: bool,   value: true }
+    # Show priority selector in compose window
     - { key: ShowPriorityControl,           type: bool,   value: true }
+    # Hide Reply-To field in compose window
     - { key: ShowReplyToHeader,             type: bool,   value: false }
+    # Don't include the original message text when replying
     - { key: AlwaysIncludeOriginalMessage,  type: bool,   value: false }
+    # Disable new-mail sound effects
     - { key: PlayMailSounds,                type: bool,   value: false }
+    # Set notification sound to none (empty string)
     - { key: NewMessagesSoundName,          type: string, value: "" }
+    # Dock badge style: 5 = count for "Inbox" only (not all mailboxes)
     - { key: MailDockBadge,                 type: int,    value: 5 }
+    # Enable inline spell checking while composing
     - { key: SpellCheckingBehavior,         type: string, value: InlineSpellCheckingEnabled }
   ignore_errors: true
 
@@ -132,15 +224,22 @@
     type:   "{{ item.type }}"
     value:  "{{ item.value }}"
   loop:
+    # Dock icon size in pixels
     - { key: tilesize,      type: integer, value: 41    }
+    # Don't auto-hide the Dock
     - { key: autohide,      type: bool,    value: false }
+    # Disable icon magnification on hover
     - { key: magnification, type: bool,    value: false }
+    # Don't rearrange Spaces based on most recent use
     - { key: mru-spaces,    type: bool,    value: false }
+    # Disable bouncing animation when launching apps
     - { key: launchanim,    type: bool,    value: false }
+    # Show recently opened apps section in Dock
     - { key: show-recents,  type: bool,    value: true  }
   ignore_errors: true
 
 # ── Wireshark ─────────────────────────────────────────────────────────────────
+# Add user to access_bpf group so Wireshark can capture packets without sudo
 - name: Add user to access_bpf group for Wireshark
   become: true
   command: "dseditgroup -o edit -a {{ ansible_user_id }} -t user access_bpf"
