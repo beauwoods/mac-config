@@ -220,6 +220,23 @@ little_snitch_preferences:
   - key: keepConnectionAlertsMinimized
     value: "false"
 
+  # Pressing Return in a connection alert does NOT auto-confirm.
+  # false = Return key does nothing (must click a button)
+  # true  = Return key confirms the highlighted action (quicker but riskier)
+  - key: confirmWithReturnKey
+    value: "false"
+
+  # Enabled notification types bitmask.
+  # 18446744073709551614 = all bits set except bit 0 (matches MacBlue-Air).
+  # 18446744073709551615 = all bits set (LS default on fresh install).
+  - key: enabledUserNotificationTypes
+    value: "18446744073709551614"
+
+  # Menu bar data rate display style.
+  # 0 = no numeric rate shown, 1 = numeric rate shown
+  - key: menuBarExtraNumericDataRateStyle
+    value: "0"
+
 # -----------------------------------------------------------------------
 # osx_defaults settings
 #

@@ -136,12 +136,21 @@ Signatures change rarely; update the file and commit when they do.
 
 ---
 
-## Little Snitch rule subscriptions: CLI
+## Little Snitch rule subscriptions: Manual GUI
 
-**Chosen:** `littlesnitch` CLI tool to subscribe to each .lsrules URL
-non-interactively, run as an Ansible task.
+**Chosen:** Rule subscriptions are added manually via the Little Snitch GUI:
+Rule Groups (sidebar) > + > Subscribe to Rule Group.
 
-**Alert settings:** Managed via `defaults write at.obdev.LittleSnitch`.
+**Why not CLI:** LS6 does not have a `subscribe` command. The `littlesnitch`
+CLI has no mechanism for adding rule group subscriptions non-interactively.
+The URLs to subscribe to are listed in `vars/main.yml` under
+`little_snitch_rule_subscriptions` for reference.
+
+**Alert settings and preferences:** Managed via `littlesnitch write-preference`,
+run as Ansible tasks in the `app_config` role (requires sudo). Keys and values
+are defined in `vars/main.yml` under `little_snitch_preferences`. Verified
+against `littlesnitch list-preferences` output — these are NOT `defaults write`
+keys; Little Snitch stores preferences in its own encrypted config store.
 
 **License entry:** Manual (GUI only).
 

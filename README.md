@@ -23,7 +23,8 @@ iCloud Drive automatically — not to the repo.
 ## Deployment (on the NEW machine)
 
 **Step 1 — Bootstrap.** Paste this into Terminal on the new machine. It installs
-Xcode CLI tools, clones this repo, updates macOS, and installs Ansible:
+Xcode CLI tools, clones this repo, updates macOS, installs Ansible, and runs
+the full playbook unattended:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/beauwoods/dotfiles/main/scripts/bootstrap.sh)"
@@ -32,27 +33,23 @@ Xcode CLI tools, clones this repo, updates macOS, and installs Ansible:
 If bootstrap reports that a restart is required for OS updates, restart and re-run the same command.
 
 **Steps 2–7 — Follow MANUAL_STEPS.md.** The full deployment runbook is there,
-including auth sessions, Ansible runs, and manual steps. The short version:
+including auth sessions and manual steps. The short version of the final run:
 
 ```bash
-cd ~/Documents/GitHub/dotfiles/ansible
-
-# Stage 2: apps + defaults (no auth needed, run unattended)
-ansible-playbook main.yml -i inventory/localhost --ask-become-pass --tags apps,defaults
-
-# Stage 3: auth session (App Store, 1Password, Adobe, SetApp, Little Snitch)
-
-# Stage 4: App Store + config (run after auth)
-ansible-playbook main.yml -i inventory/localhost --ask-become-pass --tags mas,config
+~/Documents/GitHub/dotfiles/scripts/run-playbook.sh --tags config
 ```
 
 ### Re-running specific parts
 
+Always use `run-playbook.sh` — it handles the binary path, working directory,
+verbosity, and writes a timestamped log to `~/.local/share/dotfiles/logs/`.
+
 ```bash
-# Available tags: defaults, apps, mas, config
-ansible-playbook main.yml -i inventory/localhost --ask-become-pass --tags defaults
-ansible-playbook main.yml -i inventory/localhost --ask-become-pass --tags mas
-ansible-playbook main.yml -i inventory/localhost --ask-become-pass --tags apps,config
+~/Documents/GitHub/dotfiles/scripts/run-playbook.sh --tags defaults
+~/Documents/GitHub/dotfiles/scripts/run-playbook.sh --tags apps
+~/Documents/GitHub/dotfiles/scripts/run-playbook.sh --tags mas
+~/Documents/GitHub/dotfiles/scripts/run-playbook.sh --tags config
+~/Documents/GitHub/dotfiles/scripts/run-playbook.sh --tags apps,config
 ```
 
 ## Repo layout
@@ -66,7 +63,7 @@ dotfiles/                         ← public repo (github.com/beauwoods/dotfiles
 ├── DECISIONS.md                  # Why things are the way they are
 ├── MANUAL_STEPS.md               # Full deployment day runbook
 ├── ansible/
-│   ├── ansible.cfg               # Interpreter config, cleaner output
+│   ├── ansible.cfg               # Interpreter config, cleaner output, log path
 │   ├── main.yml                  # Top-level playbook (tagged by role)
 │   ├── requirements.yml          # Ansible Galaxy dependencies
 │   ├── inventory/
@@ -81,7 +78,8 @@ dotfiles/                         ← public repo (github.com/beauwoods/dotfiles
 │   └── ssh/README.md             # 1Password SSH agent setup docs
 └── scripts/
     ├── bootstrap.sh              # Run first on new machine (curl-able)
-    └── preflight.sh              # Run on old machine before deployment day
+    ├── preflight.sh              # Run on old machine before deployment day
+    └── run-playbook.sh           # Wrapper for all manual Ansible re-runs
 
 dotfiles-private/                 ← iCloud Drive (never in this repo)
 ├── ssh/config                    # SSH config with host aliases
@@ -104,7 +102,8 @@ dotfiles-private/                 ← iCloud Drive (never in this repo)
 | Shell dotfiles | Copied from iCloud private → `~/` |
 | SSH config | Copied from iCloud private → `~/.ssh/config` |
 | Firefox | `policies.json` deployed to `/Library/Application Support/Mozilla/` |
-| Little Snitch | Rule subscriptions via `littlesnitch subscribe` |
+| Little Snitch prefs | `littlesnitch write-preference` via app_config role |
+| Little Snitch rules | Subscriptions added manually via GUI (LS6 has no CLI subscribe command) |
 | iTerm2 | `PrefsCustomFolder` pointed at iCloud private `iterm2/` directory |
 
 ## osx_defaults catalogue
@@ -114,24 +113,29 @@ each with an inline comment explaining what it does and what macOS defaults to
 without it. Settings are grouped by area:
 
 - **Trackpad** — tap to click, scroll direction, click force thresholds
-- **Finder** — show all file extensions, show hidden files, path bar, status bar, list view default, no extension-change warning
-- **Desktop** — disable click-to-show Desktop (prevents accidental window hide)
+- **Finder** — show all file extensions
 - **Clock & Units** — 24-hour clock, Celsius temperature
 - **Sound** — UI sounds off, Tink alert sound
-- **Mail** — no remote image loading, archive on delete
+- **Mail** — archive on delete (remote image loading is set manually — requires Mail open)
 - **iTerm2** — prefs folder location (iCloud private)
 
 Settings intentionally *not* automated are documented at the bottom of the
 `osx_defaults` section in `vars/main.yml`.
 
+## Logs
+
+Every run via `run-playbook.sh` or `bootstrap.sh` writes a timestamped log:
+
+```
+~/.local/share/dotfiles/logs/ansible_YYYYMMDD_HHMMSS_<tags>.log
+```
+
+To tail a run in progress:
+```bash
+tail -f ~/.local/share/dotfiles/logs/$(ls -t ~/.local/share/dotfiles/logs/ | head -1)
+```
+
 ## See also
 
 - `DECISIONS.md` — tooling choices and rationale
 - `MANUAL_STEPS.md` — everything that can't be automated
-
-## To Do
-
-- Add `Desktop` to the menu bar to the left of `Downloads`
-- Get rid of most default icons on the menu bar and put selected icons on it. Can we pull those from the prior install?
-- Get rid of junk apps like GarageBand, iMovie, and the Apple Office suite
-- Is there a way to add the properties we want to transfer from the old install to the new one, then the preflight script can capture the preference and the configuration settings and bootstrap can apply them? 

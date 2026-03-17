@@ -43,9 +43,11 @@ re-run the same curl command — it picks up where it left off.
 with the specific tag that failed:
 
 ```bash
-cd ~/Documents/GitHub/dotfiles/ansible
-~/Library/Python/3.9/bin/ansible-playbook main.yml -i inventory/localhost --ask-become-pass --tags apps
+~/Documents/GitHub/dotfiles/scripts/run-playbook.sh --tags apps
 ```
+
+The log from the failed run is in `~/.local/share/dotfiles/logs/` — check the
+most recent file for details.
 
 ---
 
@@ -69,12 +71,13 @@ is already done.
 ## Step 4: Final Ansible Run (~5 min)
 
 This deploys SSH config, shell dotfiles, Firefox policy, and Little Snitch
-rule subscriptions. Needs Little Snitch licensed and 1Password running.
+preferences. Needs Little Snitch licensed and 1Password running.
 
 ```bash
-cd ~/Documents/GitHub/dotfiles/ansible
-~/Library/Python/3.9/bin/ansible-playbook main.yml -i inventory/localhost --ask-become-pass --tags config
+~/Documents/GitHub/dotfiles/scripts/run-playbook.sh --tags config
 ```
+
+The log will be at `~/.local/share/dotfiles/logs/ansible_*_config.log`.
 
 ---
 

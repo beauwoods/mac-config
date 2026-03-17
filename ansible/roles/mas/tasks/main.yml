@@ -91,7 +91,10 @@
   become: true
   command: "{{ mas_bin.stdout }} install {{ item.id }}"
   loop: "{{ mas_apps }}"
-  when: mas_bin.rc == 0 and mas_account.rc == 0
+  when:
+    - mas_bin.rc == 0
+    - mas_account is defined
+    - mas_account.rc == 0
   register: mas_result
   changed_when: >
     'already installed' not in (mas_result.stdout | default('')) and
