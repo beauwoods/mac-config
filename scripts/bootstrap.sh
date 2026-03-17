@@ -137,12 +137,20 @@ fi
 
 cd "$DOTFILES_DIR/ansible"
 
+# Set up timestamped log file for this run
+LOG_DIR="$HOME/.local/share/dotfiles/logs"
+mkdir -p "$LOG_DIR"
+ANSIBLE_LOG_PATH="$LOG_DIR/ansible_$(date +%Y%m%d_%H%M%S)_bootstrap.log"
+export ANSIBLE_LOG_PATH
+echo "    Ansible log: $ANSIBLE_LOG_PATH"
+
 # Run everything except 'config' — config needs Little Snitch licensed first
 # and 1Password SSH agent set up. Run it manually after those two things are done.
 "$PLAYBOOK_BIN" main.yml \
   -i inventory/localhost \
   --ask-become-pass \
-  --tags apps,defaults,mas
+  --tags apps,defaults,mas \
+  -v
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
@@ -156,5 +164,9 @@ echo "║  4. 1Password            — open, sign in, enable SSH agent          
 echo "║                                                                      ║"
 echo "║  Then run this ONE final command:                                    ║"
 echo "║    cd $DOTFILES_DIR/ansible"
-echo "║    $PLAYBOOK_BIN main.yml -i inventory/localhost --ask-become-pass --tags config"
+echo "║    $PLAYBOOK_BIN main.yml -i inventory/localhost \\"
+echo "║      --ask-become-pass --tags config -v"
+echo "║                                                                      ║"
+echo "║  Full log from this run:                                             ║"
+echo "║    $ANSIBLE_LOG_PATH"
 echo "╚══════════════════════════════════════════════════════════════════════╝"

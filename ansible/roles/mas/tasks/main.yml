@@ -3,16 +3,20 @@
 # Installs App Store apps via mas CLI.
 # mas 4.0+ requires sudo to install apps.
 
-- name: Check if mas is installed
+- name: "[LOG] mas — check if already installed"
   command: which mas
   register: mas_which
   ignore_errors: true
   changed_when: false
 
+- name: "[LOG] mas — install status"
+  debug:
+    msg: "mas {{ 'already installed at ' + mas_which.stdout if mas_which.rc == 0 else 'not installed — will download' }}"
+
 - name: Download and install mas if not present
   when: mas_which.rc != 0
   block:
-    - name: Get latest mas release info from GitHub API
+    - name: "[LOG] mas — querying GitHub API for latest release"
       uri:
         url: https://api.github.com/repos/mas-cli/mas/releases/latest
         return_content: true
@@ -20,11 +24,13 @@
           Accept: application/vnd.github+json
       register: mas_release
 
-    - name: Debug available mas assets
+    - name: "[LOG] mas — API response: tag and available assets"
       debug:
-        msg: "Available assets: {{ mas_release.json.assets | map(attribute='name') | list }}"
+        msg:
+          - "Tag: {{ mas_release.json.tag_name }}"
+          - "Assets: {{ mas_release.json.assets | map(attribute='name') | list }}"
 
-    - name: Find arm64 pkg asset URL
+    - name: "[LOG] mas — resolving arm64 pkg URL"
       set_fact:
         mas_pkg_url: >-
           {{ mas_release.json.assets
@@ -32,6 +38,10 @@
              | map(attribute='browser_download_url')
              | list
              | first }}
+
+    - name: "[LOG] mas — resolved download URL"
+      debug:
+        msg: "Downloading from: {{ mas_pkg_url }}"
 
     - name: Download mas pkg
       get_url:
@@ -49,22 +59,21 @@
         state: absent
 
   rescue:
-    - name: Warn that mas install failed
+    - name: "[LOG] mas — INSTALL FAILED"
       debug:
         msg: >
           WARNING: mas install failed. App Store apps will be skipped.
           Check https://github.com/mas-cli/mas/releases/latest
 
-- name: Resolve mas binary path
+- name: "[LOG] mas — resolve binary path post-install"
   command: which mas
   register: mas_bin
   changed_when: false
   ignore_errors: true
 
-- name: Warn if mas not found after install attempt
+- name: "[LOG] mas — binary check result"
   debug:
-    msg: "WARNING: mas binary not found. App Store installs will be skipped."
-  when: mas_bin.rc != 0
+    msg: "mas binary: {{ mas_bin.stdout if mas_bin.rc == 0 else 'NOT FOUND — App Store installs will be skipped' }}"
 
 - name: Check App Store signin status
   command: "{{ mas_bin.stdout }} account"
@@ -73,12 +82,10 @@
   changed_when: false
   when: mas_bin.rc == 0
 
-- name: Warn if not signed into App Store
+- name: "[LOG] mas — App Store account status"
   debug:
-    msg: >
-      WARNING: Not signed into App Store. App Store installs will be skipped.
-      Sign in via System Settings > Apple ID and re-run: --tags mas
-  when: mas_bin.rc == 0 and mas_account.rc != 0
+    msg: "App Store: {{ 'signed in as ' + mas_account.stdout | trim if (mas_bin.rc == 0 and mas_account.rc == 0) else 'NOT SIGNED IN — App Store installs will be skipped' }}"
+  when: mas_bin.rc == 0
 
 - name: Install App Store apps
   become: true

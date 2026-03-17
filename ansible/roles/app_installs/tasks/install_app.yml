@@ -30,7 +30,11 @@
 # format "owner/repo" and leave url blank. We resolve the URL here via the
 # GitHub API using Ansible's native uri module — no shell escaping required.
 # -----------------------------------------------------------------------
-- name: "Get latest release info for {{ app.name }} from GitHub API"
+- name: "[LOG] {{ app.name }} — checking if already installed"
+  debug:
+    msg: "{{ app.name }}: {{ 'already installed — skipping' if app_installed_check.rc == 0 else 'not installed — will install' }}"
+
+- name: "[LOG] {{ app.name }} — querying GitHub API for latest release"
   uri:
     url: "https://api.github.com/repos/{{ app.github_release }}/releases/latest"
     return_content: true
@@ -41,24 +45,41 @@
     - app_installed_check.rc != 0
     - app.github_release is defined
 
-- name: "Resolve download URL for {{ app.name }} from GitHub release assets"
+- name: "[LOG] {{ app.name }} — GitHub API assets"
+  debug:
+    msg:
+      - "Tag: {{ github_release_info.json.tag_name }}"
+      - "Assets: {{ github_release_info.json.assets | map(attribute='name') | list }}"
+      - "Pattern: {{ app.github_asset_pattern }}"
+  when:
+    - app_installed_check.rc != 0
+    - app.github_release is defined
+    - github_release_info is defined
+
+- name: "[LOG] {{ app.name }} — resolve download URL from GitHub release assets"
   set_fact:
     app_download_url: >-
       {{ github_release_info.json.assets
-         | selectattr('name', 'match', '.*' + app.github_asset_pattern + '.*')
+         | selectattr('name', 'search', app.github_asset_pattern)
          | map(attribute='browser_download_url')
+         | list
          | first }}
   when:
     - app_installed_check.rc != 0
     - app.github_release is defined
     - github_release_info is defined
 
-- name: "Set download URL for {{ app.name }} (static URL)"
+- name: "[LOG] {{ app.name }} — set static download URL"
   set_fact:
     app_download_url: "{{ app.url }}"
   when:
     - app_installed_check.rc != 0
     - app.github_release is not defined
+
+- name: "[LOG] {{ app.name }} — resolved URL"
+  debug:
+    msg: "Download URL: {{ app_download_url | default('NONE — will skip') }}"
+  when: app_installed_check.rc != 0
 
 - name: "Download {{ app.name }}"
   get_url:

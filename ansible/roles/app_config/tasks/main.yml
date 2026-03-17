@@ -91,6 +91,37 @@
     mode: '0644'
 
 # -----------------------------------------------------------------------
+# Little Snitch: apply preferences via write-preference CLI
+# -----------------------------------------------------------------------
+# Must run AFTER Little Snitch is installed and licensed.
+# Requires sudo (the LS daemon owns these preferences).
+# Keys defined in vars/main.yml under little_snitch_preferences.
+# -----------------------------------------------------------------------
+- name: Find Little Snitch CLI
+  shell: |
+    LS_CLI="/Applications/Little Snitch.app/Contents/Components/littlesnitch"
+    if [ -x "$LS_CLI" ]; then echo "$LS_CLI"; else echo ""; fi
+  register: ls_cli_path
+  changed_when: false
+
+- name: Apply Little Snitch preferences
+  become: true
+  command: >
+    "{{ ls_cli_path.stdout }}" write-preference
+    "{{ item.key }}" "{{ item.value }}"
+  loop: "{{ little_snitch_preferences }}"
+  when: ls_cli_path.stdout != ""
+  # LS write-preference doesn't have a good idempotency check;
+  # writing the same value is harmless so we run unconditionally.
+
+- name: Note if Little Snitch CLI not found for preferences
+  debug:
+    msg: >
+      Little Snitch CLI not found — preferences not applied.
+      Install and license Little Snitch first, then re-run: --tags config
+  when: ls_cli_path.stdout == ""
+
+# -----------------------------------------------------------------------
 # Little Snitch: subscribe to rule groups
 # -----------------------------------------------------------------------
 # NOTE: Little Snitch 6 has no CLI command for subscribing to rule groups.

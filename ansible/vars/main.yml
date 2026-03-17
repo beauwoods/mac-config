@@ -179,7 +179,46 @@ little_snitch_rule_subscriptions:
   - "https://frabjous-cucurucho-6b35d1.netlify.app/apple_apps.lsrules"
   - "https://frabjous-cucurucho-6b35d1.netlify.app/adobe.lsrules"
   - "https://frabjous-cucurucho-6b35d1.netlify.app/browsers.lsrules"
-  - "https://frabjous-cucurucho-6b35d1.netlify.app/microsoft.lsrules"
+  - "https://frabjous-cucurucho-6b35d1.netlify.app/microsoft_google.lsrules"
+
+# -----------------------------------------------------------------------
+# Little Snitch preferences
+# Applied via `littlesnitch write-preference` (NOT defaults write).
+# Keys verified against `littlesnitch list-preferences` on 2026-03-17.
+#
+# To verify any value on the machine:
+#   sudo "/Applications/Little Snitch.app/Contents/Components/littlesnitch" read-preference <key>
+# -----------------------------------------------------------------------
+little_snitch_preferences:
+  # Alert detail level: show port and protocol in connection alerts.
+  # 0 = minimal, 1 = port and protocol shown
+  - key: detailLevelPortAndProtocol
+    value: "1"
+
+  # Default rule lifetime when creating rules from an alert.
+  # 0 = Until Quit, 1 = Forever, 2 = While Running
+  - key: defaultRuleLifetimeForCreatingRulesInAlert
+    value: "0"
+
+  # Create rules scoped to all profiles, not just the active one.
+  # false = effective in all profiles (what the alert dropdown calls "Any Profile")
+  - key: useActiveProfileWhenCreatingRulesInAlert
+    value: "false"
+
+  # Prefer domain-based rules over path-based rules in alerts.
+  # false = domain (not path/binary)
+  - key: preferPathBasedRules
+    value: "false"
+
+  # Use specific port and protocol when creating rules from alerts.
+  # true = Specific (not "Any Port")
+  - key: useSpecificPortAndProtocolWhenCreatingRulesInAlert
+    value: "true"
+
+  # Show expanded connection info boxes in alerts by default.
+  # false = NOT minimized = expanded
+  - key: keepConnectionAlertsMinimized
+    value: "false"
 
 # -----------------------------------------------------------------------
 # osx_defaults settings
