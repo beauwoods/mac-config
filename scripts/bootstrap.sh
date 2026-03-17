@@ -24,9 +24,11 @@ if ! xcode-select -p &>/dev/null; then
   until xcode-select -p &>/dev/null; do sleep 10; done
 fi
 
-# ── Clone this repo if running via curl ───────────────────────────────
+# ── Clone or update this repo ─────────────────────────────────────────
 if [ ! -d "$LOCAL" ]; then
   git clone "$REPO.git" "$LOCAL"
+else
+  git -C "$LOCAL" pull --ff-only 2>/dev/null || true
 fi
 # Re-exec from cloned copy so we get the full script
 [ "$0" != "$LOCAL/scripts/bootstrap.sh" ] && exec bash "$LOCAL/scripts/bootstrap.sh" "$@"
