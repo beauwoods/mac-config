@@ -20,12 +20,17 @@
           Accept: application/vnd.github+json
       register: mas_release
 
+    - name: Debug available mas assets
+      debug:
+        msg: "Available assets: {{ mas_release.json.assets | map(attribute='name') | list }}"
+
     - name: Find arm64 pkg asset URL
       set_fact:
         mas_pkg_url: >-
           {{ mas_release.json.assets
-             | selectattr('name', 'match', '.*arm64.*\\.pkg$')
+             | selectattr('name', 'search', 'arm64.*\.pkg')
              | map(attribute='browser_download_url')
+             | list
              | first }}
 
     - name: Download mas pkg
