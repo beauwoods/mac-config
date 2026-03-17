@@ -12,10 +12,14 @@ set -euo pipefail
 REPO="https://github.com/beauwoods/mac-config"
 LOCAL="$HOME/mac-config"
 
+# Kill any orphaned sudo keep-alive loops from previous crashed runs
+pkill -f 'sudo -n true' 2>/dev/null || true
+
 echo "Enter your password once — needed for app installs:"
 sudo -v
 ( while true; do sudo -n true; sleep 60; done ) &
-trap 'kill $! 2>/dev/null' EXIT
+SUDO_PID=$!
+trap 'kill $SUDO_PID 2>/dev/null' EXIT
 
 # ── Xcode CLI tools ────────────────────────────────────────────────────
 if ! xcode-select -p &>/dev/null; then
