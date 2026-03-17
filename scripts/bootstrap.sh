@@ -241,8 +241,22 @@ REPORT="$HOME/Desktop/migration-report.txt"
   # Sound
   check_default "NSGlobalDomain" "com.apple.sound.uiaudio.enabled" "0" "UI sounds disabled"
 
-  # Mail
-  check_default "com.apple.mail" "MoveDiscardedMessagesToArchive" "1" "Mail archive behavior"
+  # Mail (sandboxed — read from container plist)
+  MAIL_PLIST="$HOME/Library/Containers/com.apple.mail/Data/Library/Preferences/com.apple.mail.plist"
+  check_default "$MAIL_PLIST" "MoveDiscardedMessagesToArchive" "1" "Mail archive behavior"
+  check_default "$MAIL_PLIST" "ThreadingDefault" "1" "Mail threading on"
+  check_default "$MAIL_PLIST" "UserDidCollapseFavoritesSectionKey" "0" "Mail favorites sidebar expanded"
+  check_default "$MAIL_PLIST" "FullScreenPreferSplit" "0" "Mail full-screen no split"
+  check_default "$MAIL_PLIST" "SwipeAction" "1" "Mail swipe action"
+  check_default "$MAIL_PLIST" "ShowCcHeader" "1" "Mail CC header shown"
+  check_default "$MAIL_PLIST" "ShowBccHeader" "1" "Mail BCC header shown"
+  check_default "$MAIL_PLIST" "ShowComposeFormatInspectorBar" "1" "Mail format bar shown"
+  check_default "$MAIL_PLIST" "ShowPriorityControl" "1" "Mail priority control shown"
+  check_default "$MAIL_PLIST" "ShowReplyToHeader" "0" "Mail Reply-To hidden"
+  check_default "$MAIL_PLIST" "AlwaysIncludeOriginalMessage" "0" "Mail don't include original"
+  check_default "$MAIL_PLIST" "PlayMailSounds" "0" "Mail sounds off"
+  check_default "$MAIL_PLIST" "MailDockBadge" "5" "Mail dock badge style"
+  check_default "$MAIL_PLIST" "SpellCheckingBehavior" "InlineSpellCheckingEnabled" "Mail inline spell check"
 
   # Dock
   check_default "com.apple.dock" "tilesize" "41" "Dock tile size"

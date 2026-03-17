@@ -30,6 +30,20 @@ System Settings > Trackpad > Scroll & Zoom → turn off "Natural Scrolling".
 (The `defaults write` for this setting does not persist through reboot on macOS Tahoe —
 toggle it here so macOS syncs it properly.)
 
+## 6. Mail Layout (~1 min)
+Mail.app is sandboxed on macOS Tahoe — preferences can only be set from within the app.
+Open Mail, then configure:
+
+- **Mail > Settings > Viewing**: enable "Organize by conversation"
+- **Mail > Settings > Composing**: uncheck "Include original message in reply"
+- **View menu**: ensure Toolbar is visible
+- **View > Favorites Bar**: hide (or leave visible if preferred)
+- **Compose window**: show CC, BCC, Priority fields; show Format Bar
+- **Mail > Settings > General**: set notification sound to None
+- **Swipe**: leave default (archive on swipe)
+
+The migration report will verify these settings were applied correctly.
+
 ---
 
 When all done, return to the terminal and press Enter.

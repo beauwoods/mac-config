@@ -39,6 +39,8 @@ homebrew_cask_apps:
   - chatgpt
 
   # Security
+  - 1password               # v8 — direct download (v7 was App Store only)
+  # - 1password-cli          # `op` CLI — enable "Integrate with 1Password CLI" in app settings
   - little-snitch           # needs: license entry + terminal access (MANUAL_PAUSE.md)
   # wireshark — installed in bootstrap.sh (its post-install .pkg needs
   # interactive sudo that Ansible can't provide)
@@ -75,7 +77,7 @@ mas_installed_apps:
   - { id: 462062816,  name: "Microsoft PowerPoint" }
   - { id: 1475387142, name: "Tailscale" }
   - { id: 1176074088, name: "Termius" }
-  - { id: 1333542190, name: "1Password" }
+  # 1Password 8 moved to direct download — now in homebrew_cask_apps
   - { id: 441258766,  name: "Magnet" }
   - { id: 1451685025, name: "WireGuard" }
   - { id: 1295203466, name: "Windows App" }
