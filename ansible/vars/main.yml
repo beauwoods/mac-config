@@ -1,0 +1,301 @@
+---
+# vars/main.yml
+# Central source of truth for all app versions, URLs, and settings.
+# Update URLs here when new versions release; the rest of the playbook
+# picks up the change automatically.
+
+# -----------------------------------------------------------------------
+# Dotfiles repo location
+# Change this if you clone the repo somewhere other than the default.
+# This is the ONLY hardcoded path in the playbook — everything else is
+# relative to playbook_dir or discovered at runtime.
+# -----------------------------------------------------------------------
+dotfiles_dir: "~/Documents/GitHub/dotfiles"
+
+# Private configs location — personal data synced via iCloud, never in the repo.
+# preflight.sh writes to this path; Ansible reads from it.
+private_dir: "{{ ansible_env.HOME }}/Library/Mobile Documents/com~apple~CloudDocs/dotfiles-private"
+
+# -----------------------------------------------------------------------
+# App Store app IDs (for mas)
+# Prefer App Store where available: updates are automatic, install is
+# clean, and no URL maintenance needed.
+# Verify IDs at: https://apps.apple.com — the ID is the number in the URL.
+# -----------------------------------------------------------------------
+mas_apps:
+  # Communication
+  - { name: "Slack",            id: 803453959   }
+  - { name: "Discord",          id: 985367838   }
+  - { name: "Microsoft Teams",  id: 1113153706  }
+  - { name: "Zoom",             id: 1451360998  }
+  - { name: "Signal",           id: 1480068668  }
+
+  # Microsoft Office (all require M365 subscription to activate)
+  - { name: "Microsoft Word",       id: 462054704  }
+  - { name: "Microsoft Excel",      id: 462058435  }
+  - { name: "Microsoft PowerPoint", id: 462062816  }
+  - { name: "Microsoft OneNote",    id: 784801555  }
+  - { name: "Microsoft Outlook",    id: 985367838  }
+
+  # Utilities
+  - { name: "Tailscale",        id: 1475387142  }
+  - { name: "Termius",          id: 1176074088  }
+  - { name: "1Password",        id: 1333542190  }
+  - { name: "Cyberduck",        id: 409222199   }
+  # NOTE: Cyberduck App Store version is paid; direct download is free.
+  # Both are identical. Remove from here and add to direct_apps if preferred.
+  - { name: "Magnet",           id: 441258766   }  # window manager
+  - { name: "WireGuard",        id: 1451685025  }  # VPN client
+  - { name: "Windows App",      id: 1295203466  }  # Microsoft Remote Desktop
+
+  # Creative
+  - { name: "DaVinci Resolve",  id: 571213070   }
+  - { name: "Figma",            id: 1152002960  }
+
+  # Gaming
+  - { name: "GeForce NOW",      id: 1239786920  }
+
+  # AI
+  - { name: "ChatGPT",          id: 6448311069  }
+  - { name: "Claude",           id: 6473753684  }
+
+  # Hardware utilities
+  - { name: "Elgato Camera Hub", id: 1454384825  }
+  # Direct download URL returned 403 — App Store version is identical
+
+  # -----------------------------------------------------------------------
+  # DECISION NEEDED — uncomment if these apps are going on the new machine:
+  # -----------------------------------------------------------------------
+  # - { name: "Home Assistant",   id: 1099568401  }  # smart home
+  #
+  # Manual installs still needed (no stable direct download URL):
+  #   CalDigit Docking Station Utility — caldigit.com/software
+  #   DisplayLink Manager             — synaptics.com/displaylink
+  #   Imaging Edge                    — support.d-imaging.sony.co.jp
+  #   Parallels Desktop               — parallels.com/products/desktop
+  #   CrossOver                       — codeweavers.com/crossover
+  #   Logitech G Hub (lghub)          — logitech.com/software/lghub
+  #   Logitech Options+               — logitech.com/software/logi-options
+  #   Loopback (audio routing)        — rogueamoeba.com/loopback
+  #   Off Air / On Air (Elgato)       — check App Store or elgato.com
+
+# -----------------------------------------------------------------------
+# Direct-download app installs
+# type: dmg | pkg | zip
+# Only apps NOT available on the App Store, or where the direct download
+# version is meaningfully different (e.g. Little Snitch, Adobe CC).
+# -----------------------------------------------------------------------
+direct_apps:
+  - name: "Google Chrome"
+    url: "https://dl.google.com/chrome/mac/stable/GGRO/googlechrome.dmg"
+    type: dmg
+    app_name: "Google Chrome.app"
+
+  - name: "Firefox"
+    url: "https://download.mozilla.org/?product=firefox-latest-ssl&os=osx&lang=en-US"
+    type: dmg
+    app_name: "Firefox.app"
+
+  - name: "GitHub Desktop"
+    url: "https://desktop.githubusercontent.com/releases/darwin-arm64/GitHubDesktop.zip"
+    type: zip
+    app_name: "GitHub Desktop.app"
+    # NOTE: arm64 (Apple Silicon) only. This playbook targets Apple Silicon MBPs.
+    # If ever running on Intel, change darwin-arm64 to darwin-x64.
+
+  - name: "Visual Studio Code"
+    url: "https://code.visualstudio.com/sha/download?build=stable&os=darwin-arm64"
+    type: zip
+    app_name: "Visual Studio Code.app"
+    # NOTE: Not on Mac App Store
+
+  - name: "Backblaze"
+    url: "https://www.backblaze.com/mac/install_backblaze.dmg"
+    type: dmg
+    app_name: "Backblaze.app"
+    # NOTE: The DMG contains "Backblaze Installer.app" which installs to
+    # /Applications/Backblaze.app — we check for the final installed app,
+    # not the installer, so idempotency works correctly.
+
+  - name: "iTerm2"
+    url: "https://iterm2.com/downloads/stable/latest"
+    type: zip
+    app_name: "iTerm.app"
+    # NOTE: Not on Mac App Store
+
+  - name: "Google Drive"
+    url: "https://dl.google.com/drive-file-stream/GoogleDrive.dmg"
+    type: dmg
+    app_name: "Google Drive.app"
+    # NOTE: Not on Mac App Store
+
+  - name: "Adobe Creative Cloud"
+    url: "https://prod-rel-ffc-ccm.oobesaas.adobe.com/adobe-ffc-external/core/v1/wam/download?sapCode=KCCC&productName=Creative+Cloud&os=mac"
+    type: dmg
+    app_name: "Creative Cloud.app"
+    # NOTE: CC installs to /Applications/Utilities/Adobe Creative Cloud/ACC/Creative Cloud.app
+    # The app_name here is matched by find inside the DMG, not by path in /Applications.
+    # The idempotency stat check looks for /Applications/Creative Cloud.app which won't exist —
+    # add a custom check override or accept that CC re-downloads if run again (it won't reinstall
+    # if CC is already present since the DMG find will locate the correct installer).
+    # Login as Nuri required before installing Acrobat/PS/LR.
+
+  - name: "Wireshark"
+    url: "https://www.wireshark.org/download/osx/Wireshark-latest-arm64.dmg"
+    type: dmg
+    app_name: "Wireshark.app"
+    # NOTE: Not on Mac App Store
+
+  - name: "VLC"
+    url: "https://get.videolan.org/vlc/last/macosx/vlc-arm64.dmg"
+    type: dmg
+    app_name: "VLC.app"
+    # NOTE: VLC is NOT on the Mac App Store (iOS only)
+    # Check https://www.videolan.org/vlc/download-macosx.html for latest URL
+
+  - name: "Bambu Studio"
+    # Check latest at: https://github.com/bambulab/BambuStudio/releases
+    url: "https://github.com/bambulab/BambuStudio/releases/latest"
+    type: dmg
+    app_name: "Bambu Studio.app"
+    # NOTE: Not on Mac App Store
+
+  - name: "Little Snitch"
+    url: "https://www.obdev.at/downloads/littlesnitch/latest-universal.dmg"
+    type: dmg
+    app_name: "Little Snitch.app"
+    # License entered manually — see MANUAL_STEPS.md
+    # NOTE: Not on Mac App Store
+
+  - name: "SetApp"
+    url: "https://store.setapp.com/setapp.dmg"
+    type: dmg
+    app_name: "Setapp.app"
+    # Login required before installing Paste, CleanMyMac, Timing, iStat Menus
+
+# -----------------------------------------------------------------------
+# Little Snitch rule subscriptions
+# -----------------------------------------------------------------------
+little_snitch_rule_subscriptions:
+  - "https://frabjous-cucurucho-6b35d1.netlify.app/core_os_networking_security.lsrules"
+  - "https://frabjous-cucurucho-6b35d1.netlify.app/misc_apps.lsrules"
+  - "https://frabjous-cucurucho-6b35d1.netlify.app/apple_apps.lsrules"
+  - "https://frabjous-cucurucho-6b35d1.netlify.app/adobe.lsrules"
+  - "https://frabjous-cucurucho-6b35d1.netlify.app/browsers.lsrules"
+  - "https://frabjous-cucurucho-6b35d1.netlify.app/microsoft.lsrules"
+
+# -----------------------------------------------------------------------
+# osx_defaults settings
+#
+# Source: captured from old machine via preflight.sh (defaults_capture.txt)
+# and reviewed intentionally — not blindly migrated.
+#
+# To verify any setting on the current machine:
+#   defaults read <domain> <key>
+# To check what a fresh macOS install has by default:
+#   Boot a VM or check https://macos-defaults.com
+#
+# Settings here are grouped by what breaks most noticeably if missing.
+# -----------------------------------------------------------------------
+osx_defaults:
+
+  # ── Trackpad ────────────────────────────────────────────────────────────
+  # Tap to click — fresh macOS has this OFF, requires physical press
+  - domain: "com.apple.driver.AppleBluetoothMultitouch.trackpad"
+    key: "Clicking"
+    type: bool
+    value: true
+
+  - domain: "com.apple.AppleMultitouchTrackpad"
+    key: "Clicking"
+    type: bool
+    value: true
+
+  # Click force threshold: 0=light, 1=medium, 2=firm
+  # Default on fresh macOS: 1 (medium). Keeping explicit.
+  - domain: "com.apple.AppleMultitouchTrackpad"
+    key: "FirstClickThreshold"
+    type: int
+    value: 1
+
+  - domain: "com.apple.AppleMultitouchTrackpad"
+    key: "SecondClickThreshold"
+    type: int
+    value: 1
+
+  # Scroll direction: 0 = traditional (scroll bar follows finger)
+  # Fresh macOS default is 1 (natural/reversed). This is the single most
+  # disorienting thing on a new Mac if you forget to set it.
+  - domain: "NSGlobalDomain"
+    key: "com.apple.swipe-scrolling"
+    type: int
+    value: 0
+
+  # ── Finder ──────────────────────────────────────────────────────────────
+  # Show all file extensions — fresh macOS hides them (e.g. shows "report"
+  # instead of "report.docx"). Hiding extensions is a security risk and
+  # causes confusion when files have unexpected types.
+  - domain: "NSGlobalDomain"
+    key: "AppleShowAllExtensions"
+    type: bool
+    value: true
+
+  # ── Clock & Units ────────────────────────────────────────────────────────
+  # 24-hour clock — fresh macOS defaults to 12-hour with AM/PM
+  - domain: "NSGlobalDomain"
+    key: "AppleICUForce24HourTime"
+    type: bool
+    value: true
+
+  # Temperature unit — fresh macOS uses Fahrenheit in the US
+  - domain: "NSGlobalDomain"
+    key: "AppleTemperatureUnit"
+    type: string
+    value: "Celsius"
+
+  # ── Sound ────────────────────────────────────────────────────────────────
+  # UI sound effects (whooshes, etc.) — off
+  - domain: "NSGlobalDomain"
+    key: "com.apple.sound.uiaudio.enabled"
+    type: int
+    value: 0
+
+  # Alert sound — fresh macOS default is Sosumi/Funk depending on version.
+  # Tink is quieter and less jarring.
+  - domain: "NSGlobalDomain"
+    key: "com.apple.sound.beep.sound"
+    type: string
+    value: "/System/Library/Sounds/Tink.aiff"
+
+  # ── Mail ────────────────────────────────────────────────────────────────
+  # Don't load remote images/tracking pixels in email
+  - domain: "com.apple.mail-shared"
+    key: "DisableURLLoading"
+    type: bool
+    value: true
+
+  # Move deleted messages to archive rather than trash
+  - domain: "com.apple.mail"
+    key: "MoveDiscardedMessagesToArchive"
+    type: bool
+    value: true
+
+  # ── iTerm2 ──────────────────────────────────────────────────────────────
+  # Point iTerm2 at the profile stored in this repo
+  - domain: "com.googlecode.iterm2"
+    key: "LoadPrefsFromCustomFolder"
+    type: bool
+    value: true
+
+  - domain: "com.googlecode.iterm2"
+    key: "PrefsCustomFolder"
+    type: string
+    value: "{{ private_dir }}/iterm2"
+
+  # ── Intentionally NOT automated ─────────────────────────────────────────
+  # NSAutomaticCapitalizationEnabled — left to user preference at login
+  # NSAutomaticPeriodSubstitutionEnabled — left to user preference at login
+  # AppleMiniaturizeOnDoubleClick — macOS default (0) is fine
+  # Dock size/position — set via System Settings, personal preference
+  # Menu bar items — set after apps install, order varies
+  # Text replacements (NSUserDictionaryReplacementItems) — synced via iCloud

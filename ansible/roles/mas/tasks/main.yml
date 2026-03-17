@@ -1,0 +1,61 @@
+---
+# roles/mas/tasks/main.yml
+# Installs App Store apps via mas CLI.
+# Prerequisite: Must be signed into App Store before running.
+
+# FIX: use `which` instead of stat on a hardcoded path — mas can land in
+# different locations depending on how it was installed.
+- name: Check if mas is installed
+  command: which mas
+  register: mas_which
+  ignore_errors: true
+  changed_when: false
+
+- name: Download and install mas if not present
+  when: mas_which.rc != 0
+  block:
+    - name: Download mas pkg
+      # Check https://github.com/mas-cli/mas/releases for latest version
+      get_url:
+        url: "https://github.com/mas-cli/mas/releases/download/v1.8.7/mas.pkg"
+        dest: /tmp/mas.pkg
+        mode: '0644'
+
+    - name: Install mas
+      become: true
+      command: installer -pkg /tmp/mas.pkg -target /
+
+    - name: Clean up mas installer
+      file:
+        path: /tmp/mas.pkg
+        state: absent
+
+- name: Resolve mas binary path
+  command: which mas
+  register: mas_bin
+  changed_when: false
+
+- name: Check App Store signin status
+  command: "{{ mas_bin.stdout }} account"
+  register: mas_account
+  ignore_errors: true
+  changed_when: false
+
+- name: Warn if not signed into App Store
+  debug:
+    msg: >
+      WARNING: Not signed into App Store. App Store installs will be skipped.
+      Sign in manually and re-run the playbook.
+  when: mas_account.rc != 0
+
+- name: Install App Store apps
+  command: "{{ mas_bin.stdout }} install {{ item.id }}"
+  loop: "{{ mas_apps }}"
+  when: mas_account.rc == 0
+  register: mas_result
+  # FIX: check both stdout and stderr — mas version-varies on which stream
+  # the 'already installed' message appears on
+  changed_when: >
+    'already installed' not in (mas_result.stdout | default('')) and
+    'already installed' not in (mas_result.stderr | default(''))
+  ignore_errors: true

@@ -1,0 +1,19 @@
+---
+# roles/system_defaults/tasks/main.yml
+# Apply macOS system preferences via osx_defaults module.
+# Most require a logout/reboot to fully take effect.
+
+- name: Apply osx_defaults settings
+  osx_defaults:
+    domain: "{{ item.domain }}"
+    key: "{{ item.key }}"
+    type: "{{ item.type }}"
+    value: "{{ item.value }}"
+    state: present
+  loop: "{{ osx_defaults }}"
+
+- name: Notify that a restart may be needed
+  debug:
+    msg: >
+      Some defaults changes (trackpad, scroll direction) require a logout
+      or restart to take effect. Restart after Ansible run completes.

@@ -1,0 +1,68 @@
+{
+  "policies": {
+
+    "DisableDefaultBrowserAgent": true,
+
+    "SearchSuggestEnabled": false,
+
+    "EnableTrackingProtection": {
+      "Value": true,
+      "Locked": false,
+      "Cryptomining": true,
+      "Fingerprinting": true
+    },
+
+    "Cookies": {
+      "Behavior": "reject-tracker",
+      "BehaviorPrivateBrowsing": "reject-tracker",
+      "ExpireAtSessionEnd": true,
+      "Locked": false
+    },
+
+    "PasswordManagerEnabled": false,
+
+    "DisableFormHistory": true,
+
+    "AutofillAddressEnabled": false,
+    "AutofillCreditCardEnabled": false,
+
+    "PrivateBrowsingModeAvailability": 2,
+
+    "HttpsOnlyMode": "force_enabled",
+
+    "UserMessaging": {
+      "ExtensionRecommendations": false,
+      "FeatureRecommendations": false,
+      "UrlbarInterventions": false,
+      "SkipOnboarding": true,
+      "MoreFromMozilla": false,
+      "WhatsNew": false,
+      "Locked": false
+    },
+
+    "SearchBar": "separate",
+
+    "DNSOverHTTPS": {
+      "Enabled": true,
+      "ProviderURL": "https://mozilla.cloudflare-dns.com/dns-query",
+      "Locked": false
+    },
+
+    "ExtensionSettings": {
+      "{73a6fe31-595d-460b-a920-fcc0f8843232}": {
+        "installation_mode": "force_installed",
+        "install_url": "https://addons.mozilla.org/firefox/downloads/latest/noscript/latest.xpi"
+      }
+    },
+
+    "OverrideFirstRunPage": "",
+    "OverridePostUpdatePage": "",
+
+    "DisplayMenuBar": "default-off",
+
+    "SupportMenu": {
+      "Title": "",
+      "URL": ""
+    }
+  }
+}

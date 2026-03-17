@@ -1,0 +1,8 @@
+---
+# Ansible Galaxy role dependencies
+# Install with: ansible-galaxy install -r ansible/requirements.yml
+roles:
+  - name: elliotweiser.osx-command-line-tools
+    # Handles Xcode CLI tools installation cleanly, including the
+    # UI-triggered install and waiting for completion without hanging.
+    # Replaces the manual wait loop in bootstrap.sh.

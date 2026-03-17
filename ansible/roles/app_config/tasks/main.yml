@@ -1,0 +1,140 @@
+---
+# roles/app_config/tasks/main.yml
+#
+# Private configs (shell dotfiles, SSH config, signatures) are read from
+# iCloud Drive, not the repo. They land on the new machine automatically
+# via iCloud sync before Ansible runs.
+#
+# Private dir: ~/Library/Mobile Documents/com~apple~CloudDocs/dotfiles-private/
+
+# -----------------------------------------------------------------------
+# Resolve the private configs directory
+# -----------------------------------------------------------------------
+- name: Set private configs directory path
+  set_fact:
+    private_dir: "{{ ansible_env.HOME }}/Library/Mobile Documents/com~apple~CloudDocs/dotfiles-private"
+
+- name: Check iCloud private configs directory exists
+  stat:
+    path: "{{ private_dir }}"
+  register: private_dir_stat
+
+- name: Warn if private configs directory missing
+  debug:
+    msg: >
+      WARNING: iCloud private configs directory not found at {{ private_dir }}.
+      Sign into iCloud on this machine and wait for sync before running this role,
+      or run with --tags config after iCloud syncs.
+  when: not private_dir_stat.stat.exists
+
+# -----------------------------------------------------------------------
+# SSH: restore config from iCloud, public keys from repo
+# -----------------------------------------------------------------------
+- name: Ensure ~/.ssh directory exists
+  file:
+    path: "~/.ssh"
+    state: directory
+    mode: '0700'
+
+- name: Restore SSH config from iCloud private
+  copy:
+    src: "{{ private_dir }}/ssh/config"
+    dest: "~/.ssh/config"
+    mode: '0600'
+  when: private_dir_stat.stat.exists
+  ignore_errors: true
+
+- name: Restore SSH public keys from iCloud private
+  shell: |
+    SRC="{{ private_dir }}/ssh"
+    if ls "$SRC"/*.pub &>/dev/null 2>&1; then
+      cp "$SRC"/*.pub ~/.ssh/
+      chmod 644 ~/.ssh/*.pub
+    fi
+  args:
+    executable: /bin/bash
+  when: private_dir_stat.stat.exists
+  ignore_errors: true
+
+# -----------------------------------------------------------------------
+# Shell dotfiles — from iCloud private
+# -----------------------------------------------------------------------
+- name: Copy shell dotfiles from iCloud private
+  copy:
+    src: "{{ private_dir }}/shell/{{ item }}"
+    dest: "~/{{ item }}"
+    mode: '0644'
+  loop:
+    - .zshrc
+    - .zprofile
+    - .zshenv
+    - .gitconfig
+    - .gitignore_global
+  when: private_dir_stat.stat.exists
+  ignore_errors: true
+
+# -----------------------------------------------------------------------
+# Firefox: deploy policies.json (from repo — no personal data)
+# -----------------------------------------------------------------------
+- name: Create Firefox policies directory
+  become: true
+  file:
+    path: "/Library/Application Support/Mozilla"
+    state: directory
+    mode: '0755'
+
+- name: Deploy Firefox policies.json
+  become: true
+  copy:
+    src: "{{ playbook_dir }}/../configs/firefox/policies.json"
+    dest: "/Library/Application Support/Mozilla/policies.json"
+    mode: '0644'
+
+# -----------------------------------------------------------------------
+# Little Snitch: subscribe to rule groups
+# -----------------------------------------------------------------------
+- name: Find Little Snitch CLI
+  shell: which littlesnitch 2>/dev/null || ls /usr/bin/littlesnitch 2>/dev/null || echo ""
+  register: ls_cli
+  changed_when: false
+  ignore_errors: true
+
+- name: Subscribe to Little Snitch rule groups
+  command: "{{ ls_cli.stdout }} subscribe '{{ item }}'"
+  loop: "{{ little_snitch_rule_subscriptions }}"
+  when: ls_cli.stdout != ""
+  ignore_errors: true
+
+- name: Note if Little Snitch CLI not found
+  debug:
+    msg: >
+      Little Snitch CLI not found — rule subscriptions skipped.
+      Install and license Little Snitch, then re-run: --tags config
+  when: ls_cli.stdout == ""
+
+# -----------------------------------------------------------------------
+# iTerm2: point at dotfiles profile (from repo — no personal data)
+# -----------------------------------------------------------------------
+- name: Ensure iTerm2 config directory exists in iCloud private
+  file:
+    path: "{{ private_dir }}/iterm2"
+    state: directory
+    mode: '0755'
+  when: private_dir_stat.stat.exists
+
+# -----------------------------------------------------------------------
+# iStat Menus: import preferences from iCloud private
+# -----------------------------------------------------------------------
+- name: Check if iStat Menus .ismp export exists in iCloud private
+  stat:
+    path: "{{ private_dir }}/istat/iStatMenusSettings.ismp"
+  register: istat_ismp
+  when: private_dir_stat.stat.exists
+
+- name: Import iStat Menus preferences (.ismp)
+  command: open "{{ private_dir }}/istat/iStatMenusSettings.ismp"
+  when:
+    - private_dir_stat.stat.exists
+    - istat_ismp.stat is defined
+    - istat_ismp.stat.exists
+  ignore_errors: true

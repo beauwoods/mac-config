@@ -1,0 +1,113 @@
+---
+# roles/app_installs/tasks/install_app.yml
+
+- name: "Check if {{ app.name }} is already installed (standard path)"
+  stat:
+    path: "/Applications/{{ app.app_name }}"
+  register: app_check_standard
+
+# Adobe CC installs to /Applications/Utilities, not /Applications
+- name: "Check alternate install path for {{ app.name }}"
+  stat:
+    path: "/Applications/Utilities/Adobe Creative Cloud/ACC/Creative Cloud.app"
+  register: app_check_alternate
+  when: "'Adobe' in app.name"
+
+# FIX: use shell test so the result is a real boolean, not a Jinja2 string.
+# The set_fact approach with boolean `or` in Jinja2 produces a string "True"/"False"
+# which evaluates as truthy either way. This shell command returns 0/1 cleanly.
+- name: "Check if {{ app.name }} is installed (any path)"
+  shell: |
+    test -d "/Applications/{{ app.app_name }}" || \
+    {% if 'Adobe' in app.name %}
+    test -d "/Applications/Utilities/Adobe Creative Cloud/ACC/Creative Cloud.app" ||
+    {% endif %}
+    false
+  register: app_installed_check
+  changed_when: false
+  failed_when: false
+
+- name: "Download {{ app.name }}"
+  get_url:
+    url: "{{ app.url }}"
+    dest: "/tmp/{{ app.name | replace(' ', '_') }}.{{ app.type }}"
+    mode: '0644'
+  when: app_installed_check.rc != 0
+
+- name: "Install {{ app.name }} (dmg)"
+  when:
+    - app_installed_check.rc != 0
+    - app.type == 'dmg'
+  block:
+    - name: "Mount DMG for {{ app.name }}"
+      command: >
+        hdiutil attach "/tmp/{{ app.name | replace(' ', '_') }}.dmg"
+        -nobrowse -quiet -noverify
+      register: mount_output
+
+    - name: "Find .app in mounted DMG for {{ app.name }}"
+      shell: >
+        find /Volumes -maxdepth 3 -name "{{ app.app_name }}"
+        -not -path "*/.*" 2>/dev/null | head -1
+      register: found_app
+      changed_when: false
+
+    - name: "Find .pkg in mounted DMG for {{ app.name }}"
+      shell: >
+        find /Volumes -maxdepth 3 -name "*.pkg"
+        -not -path "*/.*" 2>/dev/null | head -1
+      register: found_pkg
+      changed_when: false
+      when: found_app.stdout == ""
+
+    - name: "Copy .app from DMG for {{ app.name }}"
+      command: cp -R "{{ found_app.stdout }}" /Applications/
+      when: found_app.stdout != ""
+
+    - name: "Install .pkg from DMG for {{ app.name }}"
+      become: true
+      command: installer -pkg "{{ found_pkg.stdout }}" -target /
+      when:
+        - found_app.stdout == ""
+        - found_pkg is defined
+        - found_pkg.stdout != ""
+
+    - name: "Warn if nothing installable found in DMG for {{ app.name }}"
+      debug:
+        msg: >
+          WARNING: Could not find {{ app.app_name }} or any .pkg in the
+          mounted DMG for {{ app.name }}. Manual install required.
+          Run: hdiutil attach <dmg> and check /Volumes to see what mounted.
+      when:
+        - found_app.stdout == ""
+        - found_pkg is not defined or found_pkg.stdout == ""
+
+    - name: "Detach DMG for {{ app.name }}"
+      shell: |
+        echo "{{ mount_output.stdout }}" | grep "^/dev/" | awk '{print $NF}' \
+          | grep "^/Volumes/" | head -1 | xargs -I{} hdiutil detach "{}" -quiet || true
+      ignore_errors: true
+
+- name: "Install {{ app.name }} (pkg)"
+  become: true
+  command: installer -pkg "/tmp/{{ app.name | replace(' ', '_') }}.pkg" -target /
+  when:
+    - app_installed_check.rc != 0
+    - app.type == 'pkg'
+
+- name: "Install {{ app.name }} (zip)"
+  when:
+    - app_installed_check.rc != 0
+    - app.type == 'zip'
+  block:
+    - name: Unzip
+      unarchive:
+        src: "/tmp/{{ app.name | replace(' ', '_') }}.zip"
+        dest: /Applications/
+        remote_src: yes
+
+- name: "Clean up installer for {{ app.name }}"
+  file:
+    path: "/tmp/{{ app.name | replace(' ', '_') }}.{{ app.type }}"
+    state: absent
+  when: app_installed_check.rc != 0

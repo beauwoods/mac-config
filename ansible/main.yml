@@ -1,0 +1,26 @@
+---
+# main.yml — top-level playbook
+# Run with:     ansible-playbook main.yml -i inventory/localhost --ask-become-pass
+# Dry run:      ansible-playbook main.yml -i inventory/localhost --check --ask-become-pass
+# Partial run:  ansible-playbook main.yml -i inventory/localhost --ask-become-pass --tags "defaults"
+#
+# Available tags:
+#   defaults    — Apply osx_defaults settings (trackpad, Mail, iTerm2, etc.)
+#   apps        — Install direct-download apps (DMG/PKG/ZIP)
+#   mas         — Install App Store apps via mas
+#   config      — Deploy app configs (SSH, dotfiles, Firefox, Little Snitch rules)
+#   all         — Everything (default)
+
+- name: Configure Mac
+  hosts: local
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: system_defaults
+      tags: [defaults]
+    - role: app_installs
+      tags: [apps]
+    - role: mas
+      tags: [mas]
+    - role: app_config
+      tags: [config]

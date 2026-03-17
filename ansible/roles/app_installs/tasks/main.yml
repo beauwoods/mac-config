@@ -1,0 +1,11 @@
+---
+# roles/app_installs/tasks/main.yml
+# Downloads and installs apps from direct URLs.
+# Skips apps already installed in /Applications.
+
+- name: Install direct-download apps
+  include_tasks: install_app.yml
+  loop: "{{ direct_apps }}"
+  loop_control:
+    loop_var: app
+  when: app.type != 'manual'
