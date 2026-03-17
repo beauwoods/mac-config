@@ -1,0 +1,471 @@
+#!/bin/bash
+# mac-config — CLI for managing macOS configuration
+#
+# Usage:
+#   mac-config check       Verify all settings match expected values
+#   mac-config defaults    Apply macOS defaults only (no installs)
+#   mac-config install     Install missing Homebrew packages, casks, and App Store apps
+#   mac-config status      Show what's installed vs. what's expected
+#   mac-config bootstrap   Full first-time setup (calls bootstrap.sh)
+#
+# Requires: Homebrew, Ansible (for 'defaults' subcommand), mas (for App Store)
+# Some operations require Full Disk Access for Terminal (macOS Tahoe+).
+
+set -euo pipefail
+
+# ── Resolve paths ────────────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+CONFIG="$REPO_DIR/config.yml"
+GEERLING="$HOME/mac-dev-playbook"
+
+# ── Colors ───────────────────────────────────────────────────────────────────
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+DIM='\033[2m'
+NC='\033[0m'
+
+ok()   { echo -e "  ${GREEN}✓${NC} $*"; }
+fail() { echo -e "  ${RED}✗${NC} $*"; }
+skip() { echo -e "  ${DIM}–${NC} $*"; }
+info() { echo -e "  ${BLUE}▸${NC} $*"; }
+warn() { echo -e "  ${YELLOW}⚠${NC} $*"; }
+header() {
+  echo ""
+  echo -e "${BLUE}── $* ──${NC}"
+}
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+# Parse a YAML list from config.yml (simple line-based, no yq dependency).
+# Handles both "- name" and "- { id: 123, name: \"Name\" }" formats.
+parse_casks() {
+  sed -n '/^homebrew_cask_apps:/,/^[^ #-]/p' "$CONFIG" \
+    | grep '^ *- ' \
+    | grep -v '^ *#' \
+    | sed 's/^ *- //' \
+    | sed 's/ *#.*//' \
+    | tr -d '"' \
+    | tr -d "'"
+}
+
+parse_formulae() {
+  sed -n '/^homebrew_installed_packages:/,/^[^ #-]/p' "$CONFIG" \
+    | grep '^ *- ' \
+    | grep -v '^ *#' \
+    | sed 's/^ *- //' \
+    | sed 's/ *#.*//' \
+    | tr -d '"' \
+    | tr -d "'"
+}
+
+parse_mas_apps() {
+  # Returns lines like: 803453959 Slack
+  sed -n '/^mas_installed_apps:/,/^[^ #-]/p' "$CONFIG" \
+    | grep '^ *- {' \
+    | grep -v '^ *#' \
+    | sed 's/.*id: *\([0-9]*\).*name: *"\([^"]*\)".*/\1 \2/'
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# check — verify all settings match expected values
+# ═════════════════════════════════════════════════════════════════════════════
+cmd_check() {
+  SETTINGS_OK=0
+  SETTINGS_FAIL=0
+  SETTINGS_SKIP=0
+
+  check_default() {
+    local domain="$1" key="$2" expected="$3" label="$4"
+    actual=$(defaults read "$domain" "$key" 2>/dev/null) || actual="[not set]"
+    if [ "$actual" = "$expected" ]; then
+      ok "$label"
+      SETTINGS_OK=$((SETTINGS_OK+1))
+    else
+      fail "$label  (expected=$expected actual=$actual)"
+      SETTINGS_FAIL=$((SETTINGS_FAIL+1))
+    fi
+  }
+
+  header "Trackpad"
+  check_default "com.apple.driver.AppleBluetoothMultitouch.trackpad" "Clicking" "1" "Tap to click (Bluetooth)"
+  check_default "com.apple.AppleMultitouchTrackpad" "Clicking" "1" "Tap to click (built-in)"
+  check_default "com.apple.AppleMultitouchTrackpad" "FirstClickThreshold" "1" "Light click threshold"
+  check_default "com.apple.AppleMultitouchTrackpad" "SecondClickThreshold" "1" "Light force-click threshold"
+  check_default "NSGlobalDomain" "com.apple.swipescrolldirection" "0" "Traditional scroll direction"
+
+  header "Finder"
+  check_default "NSGlobalDomain" "AppleShowAllExtensions" "1" "Show all file extensions"
+  check_default "com.apple.finder" "AppleShowAllFiles" "1" "Show hidden files"
+  check_default "com.apple.finder" "ShowPathbar" "1" "Path bar visible"
+  check_default "com.apple.finder" "ShowStatusBar" "1" "Status bar visible"
+  check_default "com.apple.finder" "FXPreferredViewStyle" "Nlsv" "Default list view"
+  check_default "com.apple.finder" "FXEnableExtensionChangeWarning" "0" "Extension change warning off"
+  check_default "com.apple.WindowManager" "EnableStandardClickToShowDesktop" "0" "Click desktop to show off"
+
+  header "Clock & Units"
+  check_default "NSGlobalDomain" "AppleICUForce24HourTime" "1" "24-hour clock"
+  check_default "NSGlobalDomain" "AppleTemperatureUnit" "Celsius" "Temperature in Celsius"
+
+  header "Sound"
+  check_default "NSGlobalDomain" "com.apple.sound.uiaudio.enabled" "0" "UI sounds disabled"
+
+  header "Save & Print Dialogs"
+  check_default "NSGlobalDomain" "NSNavPanelExpandedStateForSaveMode" "1" "Save dialog expanded"
+  check_default "NSGlobalDomain" "NSNavPanelExpandedStateForSaveMode2" "1" "Save dialog expanded (v2)"
+  check_default "NSGlobalDomain" "PMPrintingExpandedStateForPrint" "1" "Print dialog expanded"
+  check_default "NSGlobalDomain" "PMPrintingExpandedStateForPrint2" "1" "Print dialog expanded (v2)"
+
+  header "Screen Saver & Lock"
+  check_default "com.apple.screensaver" "askForPasswordDelay" "0" "Password required immediately"
+
+  header "Calendar"
+  if defaults read com.apple.iCal "Show Week Numbers" &>/dev/null; then
+    check_default "com.apple.iCal" "Show Week Numbers" "1" "Show week numbers"
+    check_default "com.apple.iCal" "TimeZone support enabled" "1" "Time zone support"
+    check_default "com.apple.iCal" "first day of week" "0" "Week starts Sunday"
+    check_default "com.apple.iCal" "last calendar view description" "7-day" "Default week view"
+    check_default "com.apple.iCal" "number of hours displayed" "14" "Hours displayed"
+    check_default "com.apple.iCal" "display birthdays calendar" "1" "Birthday calendar shown"
+    check_default "com.apple.iCal" "ShowDeclinedEvents" "0" "Declined events hidden"
+    check_default "com.apple.iCal" "InvitationNotificationsDisabled" "1" "Invitation popups off"
+    check_default "com.apple.iCal" "CalendarSidebarShown" "1" "Sidebar visible"
+    check_default "com.apple.iCal" "CalDefaultCalendar" "UseLastSelectedAsDefaultCalendar" "Default calendar (last used)"
+  else
+    skip "Calendar: domain not readable (need FDA + first launch)"
+    SETTINGS_SKIP=$((SETTINGS_SKIP+1))
+  fi
+
+  header "Mail"
+  if defaults read com.apple.mail MoveDiscardedMessagesToArchive &>/dev/null; then
+    check_default "com.apple.mail" "MoveDiscardedMessagesToArchive" "1" "Archive discarded drafts"
+    check_default "com.apple.mail" "ThreadingDefault" "1" "Conversation threading on"
+    check_default "com.apple.mail" "UserDidCollapseFavoritesSectionKey" "0" "Favorites sidebar expanded"
+    check_default "com.apple.mail" "FullScreenPreferSplit" "0" "Full-screen no split"
+    check_default "com.apple.mail" "SwipeAction" "1" "Swipe to archive"
+    check_default "com.apple.mail" "ShowCcHeader" "1" "CC field shown"
+    check_default "com.apple.mail" "ShowBccHeader" "1" "BCC field shown"
+    check_default "com.apple.mail" "ShowComposeFormatInspectorBar" "1" "Format bar shown"
+    check_default "com.apple.mail" "ShowPriorityControl" "1" "Priority selector shown"
+    check_default "com.apple.mail" "ShowReplyToHeader" "0" "Reply-To field hidden"
+    check_default "com.apple.mail" "AlwaysIncludeOriginalMessage" "0" "Don't include original in reply"
+    check_default "com.apple.mail" "PlayMailSounds" "0" "Mail sounds off"
+    check_default "com.apple.mail" "NewMessagesSoundName" "" "Notification sound none"
+    check_default "com.apple.mail" "MailDockBadge" "5" "Dock badge (Inbox only)"
+    check_default "com.apple.mail" "SpellCheckingBehavior" "InlineSpellCheckingEnabled" "Inline spell check"
+  else
+    skip "Mail: domain not readable (need FDA + first launch)"
+    SETTINGS_SKIP=$((SETTINGS_SKIP+1))
+  fi
+
+  header "Dock"
+  check_default "com.apple.dock" "tilesize" "41" "Tile size 41px"
+  check_default "com.apple.dock" "autohide" "0" "Autohide off"
+  check_default "com.apple.dock" "magnification" "0" "Magnification off"
+  check_default "com.apple.dock" "mru-spaces" "0" "MRU spaces off"
+  check_default "com.apple.dock" "launchanim" "0" "Launch animation off"
+  check_default "com.apple.dock" "show-recents" "1" "Show recents"
+
+  # ── Summary ──────────────────────────────────────────────────────────────
+  echo ""
+  echo "═══════════════════════════════════════════════════"
+  if [ "$SETTINGS_FAIL" -eq 0 ] && [ "$SETTINGS_SKIP" -eq 0 ]; then
+    echo -e "${GREEN}All $SETTINGS_OK settings OK.${NC}"
+  elif [ "$SETTINGS_FAIL" -eq 0 ]; then
+    echo -e "${GREEN}$SETTINGS_OK settings OK${NC}, $SETTINGS_SKIP skipped."
+  else
+    echo -e "${GREEN}$SETTINGS_OK OK${NC}, ${RED}$SETTINGS_FAIL mismatched${NC}, $SETTINGS_SKIP skipped."
+    echo ""
+    echo "Fix mismatches with:  mac-config defaults"
+    echo "Items marked ✗ may need logout/restart to take effect."
+  fi
+  echo ""
+
+  return "$SETTINGS_FAIL"
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# defaults — apply macOS defaults only (no installs)
+# ═════════════════════════════════════════════════════════════════════════════
+cmd_defaults() {
+  if ! command -v ansible-playbook &>/dev/null; then
+    echo "Error: ansible-playbook not found. Install with: pip3 install ansible"
+    exit 1
+  fi
+
+  # Ensure symlinks are current
+  ensure_geerling_symlinks
+
+  header "Applying macOS defaults via Ansible"
+  echo ""
+
+  cd "$GEERLING"
+
+  # Run only the osx-defaults task by targeting just that import.
+  # We use ansible-playbook with --tags extra-packages and limit to
+  # the defaults task. But since Geerling's playbook structure doesn't
+  # allow per-file targeting easily, we run the osx_defaults module
+  # directly via ansible localhost.
+  ansible localhost -m include_tasks -a "file=$REPO_DIR/tasks/osx-defaults.yml" \
+    --become --ask-become-pass 2>&1 \
+    || {
+      # Fallback: run via playbook with the extra-packages tag (runs
+      # osx-defaults.yml + remove-bundled-apps.yml, both are fast)
+      echo ""
+      info "Falling back to playbook run (includes remove-bundled-apps)..."
+      ansible-playbook main.yml \
+        --tags extra-packages \
+        --skip-tags post-auth \
+        --ask-become-pass
+    }
+
+  echo ""
+  info "Defaults applied. Running check..."
+  echo ""
+  cmd_check || true
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# status — show what's installed vs. what's expected
+# ═════════════════════════════════════════════════════════════════════════════
+cmd_status() {
+  INSTALLED=0
+  MISSING=0
+
+  check_installed() {
+    local label="$1"
+    if [ "$2" = "true" ]; then
+      ok "$label"
+      INSTALLED=$((INSTALLED+1))
+    else
+      fail "$label"
+      MISSING=$((MISSING+1))
+    fi
+  }
+
+  header "Homebrew Formulae"
+  if command -v brew &>/dev/null; then
+    BREW_LIST=$(brew list --formula 2>/dev/null | tr '\n' ' ')
+    while IFS= read -r formula; do
+      [ -z "$formula" ] && continue
+      if echo " $BREW_LIST " | grep -q " $formula "; then
+        check_installed "$formula" "true"
+      else
+        check_installed "$formula" "false"
+      fi
+    done <<< "$(parse_formulae)"
+  else
+    warn "Homebrew not installed"
+  fi
+
+  header "Homebrew Casks"
+  if command -v brew &>/dev/null; then
+    CASK_LIST=$(brew list --cask 2>/dev/null | tr '\n' ' ')
+    while IFS= read -r cask; do
+      [ -z "$cask" ] && continue
+      if echo " $CASK_LIST " | grep -q " $cask "; then
+        check_installed "$cask" "true"
+      else
+        # Also check /Applications for apps that were installed outside Homebrew
+        # (e.g., manually downloaded or via App Store migration)
+        APP_NAME=$(echo "$cask" | sed 's/-/ /g')
+        if ls /Applications/ 2>/dev/null | grep -iq "$APP_NAME"; then
+          ok "$cask  ${DIM}(installed outside Homebrew)${NC}"
+          INSTALLED=$((INSTALLED+1))
+        else
+          check_installed "$cask" "false"
+        fi
+      fi
+    done <<< "$(parse_casks)"
+  else
+    warn "Homebrew not installed"
+  fi
+
+  header "App Store Apps"
+  if command -v mas &>/dev/null; then
+    MAS_LIST=$(mas list 2>/dev/null)
+    while IFS= read -r line; do
+      [ -z "$line" ] && continue
+      APP_ID=$(echo "$line" | awk '{print $1}')
+      APP_NAME=$(echo "$line" | cut -d' ' -f2-)
+      if echo "$MAS_LIST" | grep -q "^$APP_ID "; then
+        check_installed "$APP_NAME" "true"
+      else
+        check_installed "$APP_NAME ($APP_ID)" "false"
+      fi
+    done <<< "$(parse_mas_apps)"
+  else
+    warn "mas not installed (needed for App Store apps)"
+  fi
+
+  # ── Summary ──────────────────────────────────────────────────────────────
+  echo ""
+  echo "═══════════════════════════════════════════════════"
+  if [ "$MISSING" -eq 0 ]; then
+    echo -e "${GREEN}All $INSTALLED packages installed.${NC}"
+  else
+    echo -e "${GREEN}$INSTALLED installed${NC}, ${RED}$MISSING missing${NC}."
+    echo ""
+    echo "Install missing with:  mac-config install"
+  fi
+  echo ""
+
+  return "$MISSING"
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# install — install only what's missing
+# ═════════════════════════════════════════════════════════════════════════════
+cmd_install() {
+  if ! command -v brew &>/dev/null; then
+    echo "Error: Homebrew not installed. Run 'mac-config bootstrap' for first-time setup."
+    exit 1
+  fi
+
+  SOMETHING_TO_DO=false
+
+  # ── Formulae ─────────────────────────────────────────────────────────────
+  header "Checking Homebrew formulae"
+  BREW_LIST=$(brew list --formula 2>/dev/null | tr '\n' ' ')
+  FORMULAE_TO_INSTALL=()
+  while IFS= read -r formula; do
+    [ -z "$formula" ] && continue
+    if echo " $BREW_LIST " | grep -q " $formula "; then
+      ok "$formula (installed)"
+    else
+      info "$formula (will install)"
+      FORMULAE_TO_INSTALL+=("$formula")
+    fi
+  done <<< "$(parse_formulae)"
+
+  # ── Casks ────────────────────────────────────────────────────────────────
+  header "Checking Homebrew casks"
+  CASK_LIST=$(brew list --cask 2>/dev/null | tr '\n' ' ')
+  CASKS_TO_INSTALL=()
+  while IFS= read -r cask; do
+    [ -z "$cask" ] && continue
+    if echo " $CASK_LIST " | grep -q " $cask "; then
+      ok "$cask (installed)"
+    else
+      info "$cask (will install)"
+      CASKS_TO_INSTALL+=("$cask")
+    fi
+  done <<< "$(parse_casks)"
+
+  # ── App Store ────────────────────────────────────────────────────────────
+  MAS_TO_INSTALL=()
+  if command -v mas &>/dev/null; then
+    header "Checking App Store apps"
+    MAS_LIST=$(mas list 2>/dev/null)
+    while IFS= read -r line; do
+      [ -z "$line" ] && continue
+      APP_ID=$(echo "$line" | awk '{print $1}')
+      APP_NAME=$(echo "$line" | cut -d' ' -f2-)
+      if echo "$MAS_LIST" | grep -q "^$APP_ID "; then
+        ok "$APP_NAME (installed)"
+      else
+        info "$APP_NAME (will install)"
+        MAS_TO_INSTALL+=("$APP_ID")
+      fi
+    done <<< "$(parse_mas_apps)"
+  fi
+
+  # ── Install ──────────────────────────────────────────────────────────────
+  TOTAL=$((${#FORMULAE_TO_INSTALL[@]} + ${#CASKS_TO_INSTALL[@]} + ${#MAS_TO_INSTALL[@]}))
+
+  if [ "$TOTAL" -eq 0 ]; then
+    echo ""
+    echo -e "${GREEN}Everything is already installed.${NC}"
+    return 0
+  fi
+
+  echo ""
+  echo "═══════════════════════════════════════════════════"
+  echo -e "${BLUE}$TOTAL package(s) to install.${NC}"
+  echo ""
+
+  if [ ${#FORMULAE_TO_INSTALL[@]} -gt 0 ]; then
+    header "Installing formulae"
+    for formula in "${FORMULAE_TO_INSTALL[@]}"; do
+      info "Installing $formula..."
+      brew install "$formula" || warn "Failed to install $formula"
+    done
+  fi
+
+  if [ ${#CASKS_TO_INSTALL[@]} -gt 0 ]; then
+    header "Installing casks"
+    for cask in "${CASKS_TO_INSTALL[@]}"; do
+      info "Installing $cask..."
+      brew install --cask "$cask" || warn "Failed to install $cask"
+    done
+  fi
+
+  if [ ${#MAS_TO_INSTALL[@]} -gt 0 ]; then
+    header "Installing App Store apps"
+    for app_id in "${MAS_TO_INSTALL[@]}"; do
+      info "Installing App Store ID $app_id..."
+      mas install "$app_id" || warn "Failed to install $app_id"
+    done
+  fi
+
+  echo ""
+  echo -e "${GREEN}Done.${NC} Run 'mac-config status' to verify."
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# bootstrap — full first-time setup (delegates to bootstrap.sh)
+# ═════════════════════════════════════════════════════════════════════════════
+cmd_bootstrap() {
+  exec bash "$SCRIPT_DIR/bootstrap.sh" "$@"
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Helper: ensure Geerling symlinks are current
+# ═════════════════════════════════════════════════════════════════════════════
+ensure_geerling_symlinks() {
+  if [ ! -d "$GEERLING" ]; then
+    echo "Error: $GEERLING not found. Run 'mac-config bootstrap' first."
+    exit 1
+  fi
+  ln -sf "$REPO_DIR/config.yml" "$GEERLING/config.yml"
+  for f in "$REPO_DIR/tasks"/*.yml; do
+    ln -sf "$f" "$GEERLING/tasks/$(basename "$f")"
+  done
+  ln -sf "$REPO_DIR/configs" "$GEERLING/configs"
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Main dispatch
+# ═════════════════════════════════════════════════════════════════════════════
+usage() {
+  echo "mac-config — macOS configuration manager"
+  echo ""
+  echo "Usage: mac-config <command>"
+  echo ""
+  echo "Commands:"
+  echo "  check       Verify all macOS settings match expected values"
+  echo "  defaults    Apply macOS defaults only (no package installs)"
+  echo "  status      Show installed vs. expected packages"
+  echo "  install     Install only missing packages (skips what's present)"
+  echo "  bootstrap   Full first-time setup (Homebrew, Ansible, everything)"
+  echo ""
+  echo "Examples:"
+  echo "  mac-config check                 # Quick audit after a macOS update"
+  echo "  mac-config defaults              # Re-apply settings that got reset"
+  echo "  mac-config status                # See what's missing"
+  echo "  mac-config install               # Install just what's missing"
+  echo "  mac-config bootstrap             # First-time full setup"
+}
+
+case "${1:-}" in
+  check)     shift; cmd_check "$@" ;;
+  defaults)  shift; cmd_defaults "$@" ;;
+  status)    shift; cmd_status "$@" ;;
+  install)   shift; cmd_install "$@" ;;
+  bootstrap) shift; cmd_bootstrap "$@" ;;
+  -h|--help|help) usage ;;
+  "")        usage; exit 1 ;;
+  *)         echo "Unknown command: $1"; echo ""; usage; exit 1 ;;
+esac

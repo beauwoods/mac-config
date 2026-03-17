@@ -195,111 +195,18 @@ REPORT="$HOME/Desktop/migration-report.txt"
     echo "Run preflight.sh on the old machine first for a full diff."
   fi
 
-  # ── Settings Post-Check ──────────────────────────────────────────────
+  # ── Settings & Package Verification ─────────────────────────────────
   echo ""
   echo "════════════════════════════════════════════════════════════"
   echo "## Settings Verification"
   echo ""
-  echo "Checking macOS defaults against expected values..."
+  # Strip ANSI color codes for the plain-text report
+  "$LOCAL/scripts/mac-config" check 2>&1 | sed 's/\x1b\[[0-9;]*m//g' || true
   echo ""
-
-  SETTINGS_OK=0
-  SETTINGS_FAIL=0
-
-  check_default() {
-    local domain="$1" key="$2" expected="$3" label="$4"
-    actual=$(defaults read "$domain" "$key" 2>/dev/null) || actual="[not set]"
-    if [ "$actual" = "$expected" ]; then
-      echo "  OK  $label: $actual"
-      SETTINGS_OK=$((SETTINGS_OK+1))
-    else
-      echo "  !!  $label: expected=$expected actual=$actual"
-      SETTINGS_FAIL=$((SETTINGS_FAIL+1))
-    fi
-  }
-
-  # Trackpad
-  check_default "com.apple.driver.AppleBluetoothMultitouch.trackpad" "Clicking" "1" "Tap to click (Bluetooth)"
-  check_default "com.apple.AppleMultitouchTrackpad" "Clicking" "1" "Tap to click (built-in)"
-  check_default "com.apple.AppleMultitouchTrackpad" "FirstClickThreshold" "1" "Light click threshold"
-  check_default "com.apple.AppleMultitouchTrackpad" "SecondClickThreshold" "1" "Light force-click threshold"
-  check_default "NSGlobalDomain" "com.apple.swipescrolldirection" "0" "Scroll direction (traditional)"
-
-  # Finder
-  check_default "NSGlobalDomain" "AppleShowAllExtensions" "1" "Show all file extensions"
-  check_default "com.apple.finder" "AppleShowAllFiles" "1" "Show hidden files"
-  check_default "com.apple.finder" "ShowPathbar" "1" "Finder path bar"
-  check_default "com.apple.finder" "ShowStatusBar" "1" "Finder status bar"
-  check_default "com.apple.finder" "FXPreferredViewStyle" "Nlsv" "Finder list view"
-  check_default "com.apple.finder" "FXEnableExtensionChangeWarning" "0" "Extension change warning off"
-  check_default "com.apple.WindowManager" "EnableStandardClickToShowDesktop" "0" "Click desktop to show off"
-
-  # Clock & units
-  check_default "NSGlobalDomain" "AppleICUForce24HourTime" "1" "24-hour clock"
-  check_default "NSGlobalDomain" "AppleTemperatureUnit" "Celsius" "Temperature unit"
-
-  # Sound
-  check_default "NSGlobalDomain" "com.apple.sound.uiaudio.enabled" "0" "UI sounds disabled"
-
-  # Save & Print dialogs
-  check_default "NSGlobalDomain" "NSNavPanelExpandedStateForSaveMode" "1" "Save dialog expanded"
-  check_default "NSGlobalDomain" "NSNavPanelExpandedStateForSaveMode2" "1" "Save dialog expanded (v2)"
-  check_default "NSGlobalDomain" "PMPrintingExpandedStateForPrint" "1" "Print dialog expanded"
-  check_default "NSGlobalDomain" "PMPrintingExpandedStateForPrint2" "1" "Print dialog expanded (v2)"
-
-  # Screen saver & lock
-  check_default "com.apple.screensaver" "askForPasswordDelay" "0" "Password required immediately"
-
-  # Calendar (requires Full Disk Access — see MANUAL_PAUSE.md step 1)
-  if defaults read com.apple.iCal "Show Week Numbers" &>/dev/null; then
-    check_default "com.apple.iCal" "Show Week Numbers" "1" "Cal show week numbers"
-    check_default "com.apple.iCal" "TimeZone support enabled" "1" "Cal time zone support"
-    check_default "com.apple.iCal" "first day of week" "0" "Cal week starts Sunday"
-    check_default "com.apple.iCal" "last calendar view description" "7-day" "Cal default week view"
-    check_default "com.apple.iCal" "number of hours displayed" "14" "Cal hours displayed"
-    check_default "com.apple.iCal" "display birthdays calendar" "1" "Cal show birthdays"
-    check_default "com.apple.iCal" "ShowDeclinedEvents" "0" "Cal hide declined events"
-    check_default "com.apple.iCal" "InvitationNotificationsDisabled" "1" "Cal invitation popups off"
-    check_default "com.apple.iCal" "CalendarSidebarShown" "1" "Cal sidebar visible"
-    check_default "com.apple.iCal" "CalDefaultCalendar" "UseLastSelectedAsDefaultCalendar" "Cal default calendar"
-  else
-    echo "  --  Calendar: domain not readable — ensure Terminal has Full Disk Access and Calendar has been launched once"
-  fi
-
-  # Mail (requires Full Disk Access — see MANUAL_PAUSE.md step 1)
-  if defaults read com.apple.mail MoveDiscardedMessagesToArchive &>/dev/null; then
-    check_default "com.apple.mail" "MoveDiscardedMessagesToArchive" "1" "Mail archive behavior"
-    check_default "com.apple.mail" "ThreadingDefault" "1" "Mail threading on"
-    check_default "com.apple.mail" "UserDidCollapseFavoritesSectionKey" "0" "Mail favorites sidebar expanded"
-    check_default "com.apple.mail" "FullScreenPreferSplit" "0" "Mail full-screen no split"
-    check_default "com.apple.mail" "SwipeAction" "1" "Mail swipe action"
-    check_default "com.apple.mail" "ShowCcHeader" "1" "Mail CC header shown"
-    check_default "com.apple.mail" "ShowBccHeader" "1" "Mail BCC header shown"
-    check_default "com.apple.mail" "ShowComposeFormatInspectorBar" "1" "Mail format bar shown"
-    check_default "com.apple.mail" "ShowPriorityControl" "1" "Mail priority control shown"
-    check_default "com.apple.mail" "ShowReplyToHeader" "0" "Mail Reply-To hidden"
-    check_default "com.apple.mail" "AlwaysIncludeOriginalMessage" "0" "Mail don't include original"
-    check_default "com.apple.mail" "PlayMailSounds" "0" "Mail sounds off"
-    check_default "com.apple.mail" "NewMessagesSoundName" "" "Mail notification sound none"
-    check_default "com.apple.mail" "MailDockBadge" "5" "Mail dock badge style"
-    check_default "com.apple.mail" "SpellCheckingBehavior" "InlineSpellCheckingEnabled" "Mail inline spell check"
-  else
-    echo "  --  Mail: domain not readable — ensure Terminal has Full Disk Access and Mail has been launched once"
-  fi
-
-  # Dock
-  check_default "com.apple.dock" "tilesize" "41" "Dock tile size (px)"
-  check_default "com.apple.dock" "autohide" "0" "Dock autohide off"
-  check_default "com.apple.dock" "magnification" "0" "Dock magnification off"
-  check_default "com.apple.dock" "mru-spaces" "0" "MRU spaces off"
-  check_default "com.apple.dock" "launchanim" "0" "Launch animation off"
-  check_default "com.apple.dock" "show-recents" "1" "Dock show recents"
-
+  echo "════════════════════════════════════════════════════════════"
+  echo "## Package Status"
   echo ""
-  echo "Settings check: $SETTINGS_OK OK, $SETTINGS_FAIL mismatched"
-  if [ "$SETTINGS_FAIL" -gt 0 ]; then
-    echo "Items marked !! need attention — some may require logout/restart to take effect."
-  fi
+  "$LOCAL/scripts/mac-config" status 2>&1 | sed 's/\x1b\[[0-9;]*m//g' || true
 } > "$REPORT"
 
 open "$REPORT"
