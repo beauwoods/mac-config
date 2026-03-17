@@ -14,7 +14,24 @@
 set -euo pipefail
 
 # ── Resolve paths ────────────────────────────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# When run via curl (bash <(...)), $0 is a pipe and there's no script on disk.
+# Detect this and clone/pull the repo so we have config.yml and task files.
+REPO_URL="https://github.com/beauwoods/mac-config.git"
+LOCAL="$HOME/mac-config"
+
+if [ ! -f "${BASH_SOURCE[0]:-}" ] || [ "$(basename "${BASH_SOURCE[0]:-}")" = "bash" ]; then
+  # Running via curl pipe — ensure local clone exists
+  if [ ! -d "$LOCAL" ]; then
+    echo "Cloning mac-config..."
+    git clone "$REPO_URL" "$LOCAL"
+  else
+    git -C "$LOCAL" pull --ff-only 2>/dev/null || true
+  fi
+  # Re-exec from the cloned copy so all paths resolve correctly
+  exec bash "$LOCAL/scripts/mac-config" "$@"
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG="$REPO_DIR/config.yml"
 GEERLING="$HOME/mac-dev-playbook"
