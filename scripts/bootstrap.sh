@@ -17,7 +17,38 @@ trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null' EXIT
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
-echo "==> Step 1: Clone dotfiles repo"
+echo "==> Step 1: Install Xcode Command Line Tools"
+echo "    (required for git, which is needed to clone the dotfiles repo)"
+
+if xcode-select -p &>/dev/null; then
+  echo "    Already installed at: $(xcode-select -p)"
+else
+  xcode-select --install 2>/dev/null || true
+  echo ""
+  echo "    A dialog has appeared asking you to install the Command Line Tools."
+  echo "    Click 'Install' and wait for it to finish, then press Enter here."
+  echo "    (Do not click 'Get Xcode' — just 'Install')"
+  echo ""
+  WAIT=0
+  TIMEOUT=600
+  until xcode-select -p &>/dev/null; do
+    sleep 10
+    WAIT=$((WAIT+10))
+    echo -n "."
+    if [ "$WAIT" -ge "$TIMEOUT" ]; then
+      echo ""
+      echo "ERROR: Timed out waiting for Xcode CLI tools after ${TIMEOUT}s."
+      echo "Install manually: xcode-select --install — then re-run this script."
+      exit 1
+    fi
+  done
+  echo ""
+  echo "    Xcode CLI tools installed."
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+echo ""
+echo "==> Step 2: Clone dotfiles repo"
 DOTFILES_DIR="$HOME/Documents/GitHub/dotfiles"
 REPO_URL="https://github.com/beauwoods/dotfiles.git"
 
@@ -43,7 +74,8 @@ if [ "$(realpath "$0" 2>/dev/null || echo "$0")" != "$(realpath "$SELF" 2>/dev/n
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-echo "==> Step 2: Install pending macOS software updates"
+echo ""
+echo "==> Step 3: Install pending macOS software updates"
 echo "    This ensures the OS is fully patched before setup begins."
 echo ""
 
@@ -62,35 +94,6 @@ if echo "$UPDATE_OUTPUT" | grep -qi "restart"; then
   exit 0
 else
   echo "  Updates complete (or none needed)."
-fi
-
-# ─────────────────────────────────────────────────────────────────────────────
-echo ""
-echo "==> Step 3: Install Xcode Command Line Tools..."
-if xcode-select -p &>/dev/null; then
-  echo "    Already installed at: $(xcode-select -p)"
-else
-  xcode-select --install 2>/dev/null || true
-  echo ""
-  echo "    A dialog has appeared asking you to install the Command Line Tools."
-  echo "    Click 'Install' and wait for it to finish, then press Enter here."
-  echo "    (Do not click 'Get Xcode' — just 'Install')"
-  echo ""
-  WAIT=0
-  TIMEOUT=600
-  until xcode-select -p &>/dev/null; do
-    sleep 10
-    WAIT=$((WAIT+10))
-    echo -n "."
-    if [ "$WAIT" -ge "$TIMEOUT" ]; then
-      echo ""
-      echo "ERROR: Timed out waiting for Xcode CLI tools after ${TIMEOUT}s."
-      echo "Install manually: xcode-select --install — then re-run this script."
-      exit 1
-    fi
-  done
-  echo ""
-  echo "    Xcode CLI tools installed."
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
