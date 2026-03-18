@@ -6,7 +6,7 @@ then return to the terminal and press Enter to continue.
 ---
 
 ## 1. Full Disk Access for Terminal (~1 min)
-Required for Phase 2 to write Mail.app preferences (macOS Tahoe sandbox).
+Required for Phase 2 to write Mail and Calendar preferences (macOS Tahoe sandbox).
 
 System Settings > Privacy & Security > Full Disk Access → enable **Terminal**.
 
@@ -27,17 +27,25 @@ Open SetApp → sign in → install: Paste, CleanMyMac, Timing, iStat Menus.
   - https://frabjous-cucurucho-6b35d1.netlify.app/browsers.lsrules
   - https://frabjous-cucurucho-6b35d1.netlify.app/microsoft_google.lsrules
 
+> **Why manual?** Little Snitch has no CLI for license entry or rule group
+> subscriptions. The `littlesnitch` CLI requires "Allow access via Terminal"
+> to be enabled first (chicken-and-egg), and rule subscriptions can only be
+> added via GUI or by editing the exported model JSON (fragile).
+
 ## 5. 1Password (~2 min)
 Open 1Password → sign in → Settings > Developer → enable "Use the SSH agent".
 
 ## 6. Trackpad Scroll Direction
 System Settings > Trackpad > Scroll & Zoom → turn off "Natural Scrolling".
-(The `defaults write` for this setting does not persist through reboot on macOS Tahoe —
-toggle it here so macOS syncs it properly.)
 
-## 7. Launch Mail (~30 sec)
-Open Mail.app and add your account(s). Phase 2 will write Mail preferences
-automatically via `defaults write` (requires Full Disk Access from step 1).
+> **Why manual?** `defaults write` for this setting doesn't persist on macOS
+> Tahoe — the system uses a private framework to apply the change, not just
+> the plist value. Toggling in System Settings is the only reliable method.
+
+## 7. Launch Mail & Calendar (~30 sec each)
+Open Mail.app and add your account(s). Open Calendar briefly.
+Phase 2 will write preferences for both automatically via `defaults write`
+(requires Full Disk Access from step 1).
 
 ---
 

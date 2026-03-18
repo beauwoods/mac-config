@@ -13,7 +13,7 @@ Three components:
 - **iCloud Drive** (`dotfiles-private/`) — syncs automatically once you sign
   into Apple ID; holds shell dotfiles, SSH config, iTerm2 prefs, signatures
 - **This repo** — holds `config.yml`, custom task files, Firefox policy,
-  bootstrap scripts
+  bootstrap scripts, and the `mac-config` CLI
 
 ## Quick Start (new machine)
 
@@ -27,10 +27,45 @@ This runs in two phases:
 
 1. **Phase 1 (~2 hours, unattended)** — Xcode CLI tools, Homebrew, Ansible,
    all packages/casks/App Store apps, macOS preferences, Dock layout
-2. **Pause** — a window opens with manual steps (Adobe CC sign-in, SetApp,
-   Little Snitch license, 1Password SSH agent)
+2. **Pause** — a window opens with manual steps (Full Disk Access, Adobe CC,
+   SetApp, Little Snitch license, 1Password SSH agent, scroll direction, Mail)
 3. **Phase 2 (~5 min)** — SSH config restore, Firefox policy, Little Snitch
-   prefs, Dock folders, Timing added to Dock
+   prefs, Calendar/Mail preferences (via FDA), Dock folders
+
+## Day-to-Day Commands
+
+After initial setup, use the `mac-config` CLI for targeted operations.
+Run from a local clone or directly via curl:
+
+```bash
+# From local clone (if ~/mac-config/scripts is in PATH)
+mac-config <command>
+
+# Or via curl (auto-clones repo on first run)
+bash <(curl -fsSL https://raw.githubusercontent.com/beauwoods/mac-config/main/scripts/mac-config) <command>
+```
+
+| Command | What it does |
+|---|---|
+| `mac-config check` | Verify all macOS settings match expected values |
+| `mac-config defaults` | Apply macOS defaults only (no package installs) |
+| `mac-config status` | Show installed vs. expected packages |
+| `mac-config install` | Install only missing packages (skips what's present) |
+| `mac-config bootstrap` | Full first-time setup (calls bootstrap.sh) |
+
+**Typical workflows:**
+
+```bash
+# After a macOS update resets settings
+mac-config check        # see what drifted
+mac-config defaults     # re-apply just the settings
+
+# Adding a new app to config.yml
+mac-config install      # installs only what's missing
+
+# Full audit
+mac-config check && mac-config status
+```
 
 ## Preflight (on the old machine)
 
@@ -52,11 +87,12 @@ mac-config/                          (this repo)
 ├── config.yml                       ← overrides Geerling's default.config.yml
 ├── requirements.yml                 ← Ansible Galaxy dependencies
 ├── scripts/
-│   ├── bootstrap.sh                 ← curl-able one-command setup
+│   ├── mac-config                   ← CLI for check/defaults/status/install
+│   ├── bootstrap.sh                 ← curl-able one-command first-time setup
 │   └── preflight.sh                 ← run on old machine before deployment
 ├── tasks/
 │   ├── extra-packages.yml           ← dispatcher (Geerling imports this)
-│   ├── osx-defaults.yml             ← all macOS preferences
+│   ├── osx-defaults.yml             ← all macOS preferences (fully commented)
 │   ├── remove-bundled-apps.yml      ← removes GarageBand, iMovie, etc.
 │   ├── firefox-policy.yml           ← deploys policies.json
 │   ├── little-snitch.yml            ← write-preference commands
@@ -87,23 +123,38 @@ Phase separation uses Ansible tags:
 - `--skip-tags post-auth` runs everything except post-auth tasks
 - `--tags post-auth` runs only the tasks that need manual setup first
 
-## Re-running
+## What's Automated
 
-From `~/mac-dev-playbook`:
+| Area | How |
+|---|---|
+| CLI tools | Homebrew packages via Geerling's homebrew role |
+| GUI apps | Homebrew casks via Geerling's homebrew role |
+| App Store apps | `mas` CLI via Geerling's mas role |
+| Dock layout | Geerling's dock role + `dock-folders.yml` |
+| macOS preferences | `osx_defaults` module in `osx-defaults.yml` — trackpad, Finder, clock, sound, save/print dialogs, screensaver lock, menu bar |
+| Calendar prefs | `osx_defaults` for `com.apple.iCal` (requires FDA) |
+| Mail prefs | `osx_defaults` for `com.apple.mail` (requires FDA) |
+| Shell dotfiles | Copied from iCloud private via `ssh-config.yml` |
+| SSH config | Copied from iCloud private via `ssh-config.yml` |
+| Firefox policy | `policies.json` deployed to `/Library/Application Support/Mozilla/` |
+| Little Snitch prefs | `littlesnitch write-preference` commands |
+| iTerm2 | `PrefsCustomFolder` pointed at iCloud private |
+| Bundled app removal | GarageBand, iMovie, Pages, Numbers, Keynote |
+| Settings verification | `mac-config check` audits all defaults against expected values |
+| Package verification | `mac-config status` compares installed packages against config.yml |
 
-```bash
-# Full Phase 1 again
-ansible-playbook main.yml --ask-become-pass --skip-tags post-auth
+## What's Manual (and Why)
 
-# Full Phase 2 again
-ansible-playbook main.yml --ask-become-pass --tags post-auth
-
-# Just macOS defaults
-ansible-playbook main.yml --ask-become-pass --tags extra-packages --skip-tags post-auth
-
-# Just Dock
-ansible-playbook main.yml --ask-become-pass --tags dock
-```
+| Step | Why it can't be automated |
+|---|---|
+| Full Disk Access for Terminal | macOS requires GUI interaction in Privacy settings |
+| Adobe Creative Cloud sign-in | Interactive auth + per-app installs inside CC |
+| SetApp sign-in + app installs | Interactive auth, apps installed through SetApp UI |
+| Little Snitch license key | No CLI for license entry |
+| Little Snitch rule subscriptions | No CLI to subscribe; could use `export-model`/`restore-model` but fragile |
+| 1Password sign-in + SSH agent | Interactive auth required |
+| Trackpad scroll direction | `defaults write` doesn't persist on macOS Tahoe — must toggle in System Settings |
+| Mail account setup | Must launch Mail and add accounts before preferences can be written |
 
 ## SSH Keys (post-bootstrap)
 
@@ -118,21 +169,22 @@ ssh -T git@github.com
 git -C ~/mac-config remote set-url origin git@github.com:beauwoods/mac-config.git
 ```
 
-## What's Automated
+## Re-running
 
-| Area | How |
-|---|---|
-| CLI tools | Homebrew packages via Geerling's homebrew role |
-| GUI apps | Homebrew casks via Geerling's homebrew role |
-| App Store apps | `mas` CLI via Geerling's mas role |
-| Dock layout | Geerling's dock role + `dock-folders.yml` |
-| macOS preferences | `osx_defaults` module in `osx-defaults.yml` |
-| Shell dotfiles | Copied from iCloud private via `ssh-config.yml` |
-| SSH config | Copied from iCloud private via `ssh-config.yml` |
-| Firefox policy | `policies.json` deployed to `/Library/Application Support/Mozilla/` |
-| Little Snitch | `littlesnitch write-preference` commands |
-| iTerm2 | `PrefsCustomFolder` pointed at iCloud private |
-| Bundled app removal | GarageBand, iMovie, Pages, Numbers, Keynote |
+Use the `mac-config` CLI (recommended), or run Ansible directly:
+
+```bash
+# Re-apply just macOS defaults
+mac-config defaults
+
+# Install only missing packages
+mac-config install
+
+# Or via Ansible directly from ~/mac-dev-playbook:
+ansible-playbook main.yml --ask-become-pass --skip-tags post-auth   # Phase 1
+ansible-playbook main.yml --ask-become-pass --tags post-auth        # Phase 2
+ansible-playbook main.yml --ask-become-pass --tags dock             # Just Dock
+```
 
 ## Logs
 
